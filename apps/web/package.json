@@ -1,0 +1,50 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "../../node_modules/.bin/jest --config jest.config.ts",
+    "test:unit": "../../node_modules/.bin/jest --config jest.config.ts db.test services.test",
+    "test:integration": "../../node_modules/.bin/jest --config jest.config.ts api.integration",
+    "test:coverage": "../../node_modules/.bin/jest --config jest.config.ts --coverage"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.48",
+    "@creit-tech/stellar-wallets-kit": "npm:@jsr/creit-tech__stellar-wallets-kit@^2.1.0",
+    "@stellar/freighter-api": "^6.0.0",
+    "@stellar/mpp": "github:stellar-experimental/stellar-mpp-sdk",
+    "@supabase/ssr": "^0.9.0",
+    "@supabase/supabase-js": "^2.100.1",
+    "@tailwindcss/postcss": "^4.2.2",
+    "@x402/core": "^2.8.0",
+    "@x402/fetch": "^2.8.0",
+    "@x402/stellar": "^2.8.0",
+    "ai": "^6.0.141",
+    "cmdk": "^1.1.1",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.7.0",
+    "next": "16.2.1",
+    "postcss": "^8.4.31",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tailwindcss": "^4.2.2",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "jest": "^30.3.0",
+    "jest-environment-node": "^30.3.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5"
+  }
+}
