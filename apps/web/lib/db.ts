@@ -185,32 +185,3 @@ export async function getTransactionById(id: string): Promise<DBTransaction | nu
   }
   return memTransactions.find((t) => t.id === id) || null;
 }
-
-// ─── Seed demo data ───
-
-let seeded = false;
-export async function seedDemoData() {
-  if (seeded) return;
-  seeded = true;
-
-  const session = await createSession(5.0);
-
-  const demos = [
-    { tool: "search", endpoint: "/api/tools/search", amount: 0.01 },
-    { tool: "summarize", endpoint: "/api/tools/summarize", amount: 0.02 },
-    { tool: "search", endpoint: "/api/tools/search", amount: 0.01 },
-    { tool: "analyze", endpoint: "/api/tools/analyze", amount: 0.03 },
-  ];
-
-  for (const d of demos) {
-    await addTransaction({
-      session_id: session.id,
-      endpoint: d.endpoint,
-      tool_name: d.tool,
-      amount: d.amount,
-      status: "success",
-      tx_hash: `stellar:${Array.from({ length: 64 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("")}`,
-      request_payload: { tool: d.tool, demo: true },
-    });
-  }
-}
