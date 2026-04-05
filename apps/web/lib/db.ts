@@ -6,6 +6,14 @@ import { supabase, isSupabaseConfigured, type DBSession, type DBTransaction } fr
 import { DEFAULT_SPENDING_LIMIT, SESSION_TTL_MS } from "./constants";
 
 // ─── In-memory fallback ───
+// WARNING: In-memory storage resets on every server restart.
+// Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY for persistent storage.
+if (!isSupabaseConfigured && process.env.NODE_ENV === "production") {
+  console.warn(
+    "[db] WARNING: Running in-memory storage in production. " +
+    "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY for persistent data."
+  );
+}
 const memSessions = new Map<string, DBSession>();
 const memTransactions: DBTransaction[] = [];
 const sessionLocks = new Map<string, Promise<void>>();
