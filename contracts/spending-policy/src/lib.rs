@@ -54,7 +54,12 @@ impl SpendingPolicy {
     /// Returns the new cumulative spend if authorized.
     /// Panics if the spend would exceed the limit.
     pub fn authorize(env: Env, agent: Address, amount: i128) -> i128 {
-        agent.require_auth();
+        // Resource servers enforce spend limits based on payment receipts.
+        // The contract tracks cumulative spend per `agent` address, but authorization
+        // itself is restricted to the contract admin to prevent abuse (i.e., locking
+        // another agent's budget without a valid payment flow).
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
 
         let limit: i128 = env.storage().instance().get(&DataKey::Limit).unwrap();
         let spent: i128 = env
