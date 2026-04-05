@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession, getSession, canSpend, recordSpend, addTransaction, getSpendingSummary } from "@/lib/db";
-import { TOOL_PRICES, TOOL_PRICES_TOKEN_UNITS, STELLAR_NETWORK, SPENDING_POLICY_CONTRACT_ID } from "@/lib/constants";
+import { TOOL_PRICES, STELLAR_NETWORK } from "@/lib/constants";
 import type { AgentStep, ToolName } from "@/lib/types";
 import { generateText, tool } from "ai";
 import { openai } from "@ai-sdk/openai";
@@ -123,6 +123,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     addStep("Done", "success", lastToolUsed, 0, "All tools executed and results aggregated");
 
+    const spendingStep = steps.find(
+      (s) => s.action === "SpendingPolicy.authorize" && s.status === "success" && s.detail.includes("policy_tx:")
+    );
+    const policyTxHash =
+      spendingStep?.detail.match(/policy_tx:\s*([^\s]+)/)?.[1] ?? null;
+    const policyAgent =
+      spendingStep?.detail.match(/policy_agent:\s*([^\s]+)/)?.[1] ?? null;
+
     return NextResponse.json({
       sessionId,
       tool: lastToolUsed,
@@ -131,6 +139,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       result: finalResult,
       steps,
       summary: await getSpendingSummary(sessionId),
+      proofs: {
+        policyTxHash,
+        policyAgent,
+      },
     });
   } catch (err) {
     console.error("Agent execution error detail:", err);
@@ -194,30 +206,7 @@ async function executeToolWithPayment(
   }
   addStep(`Budget available for ${toolName}`, "success", toolName, 0, `$${price} available`);
 
-  let policyTxHash: string | null = null;
-
-  // 2. On-chain spending policy read-check (fail-closed)
-  addStep(
-    `Soroban can_spend ${toolName}`,
-    "calling",
-    toolName,
-    price,
-    "Simulating SpendingPolicy.can_spend()"
-  );
-  const canSpendOnChain = await canSpendOnChainSpendingPolicy(toolName);
-  if (!canSpendOnChain) {
-    addStep(
-      `Soroban can_spend ${toolName}`,
-      "failed",
-      toolName,
-      price,
-      "On-chain limit would be exceeded"
-    );
-    throw new Error("Budget exceeded (on-chain spending policy)");
-  }
-  addStep(`Soroban can_spend ${toolName}`, "success", toolName, price, "On-chain limit check passed");
-
-  // 3. Payment & Call
+  // 2. Payment & Call
   addStep(`Requesting ${toolName}`, "payment_required", toolName, 0, "402 — Payment Required");
   addStep(`Paying $${price} USDC`, "paying", toolName, price, "Signing via @x402/stellar");
 
@@ -227,12 +216,29 @@ async function executeToolWithPayment(
     toolResultTxHash = toolResult.txHash;
     addStep(`${toolName} confirmed`, "success", toolName, price, `tx: ${toolResult.txHash}`);
 
-    // 4. Commit on-chain spending policy only after the tool succeeded.
-    addStep(`Soroban authorize ${toolName}`, "calling", toolName, price, "Submitting SpendingPolicy.authorize()");
-    policyTxHash = await authorizeOnChainSpendingPolicy(toolName);
-    addStep(`Soroban authorize ${toolName}`, "success", toolName, price, `policy_tx: ${policyTxHash}`);
+    const policyTxHashFromTool: string | null = (toolResult as any)?.data?.proofs?.policyTxHash
+      ? String((toolResult as any).data.proofs.policyTxHash)
+      : (toolResult as any)?.proofs?.policyTxHash
+        ? String((toolResult as any).proofs.policyTxHash)
+        : null;
 
-    // 5. Record the session spend only after successful tool + on-chain authorization.
+    const policyAgentFromTool: string | null = (toolResult as any)?.data?.proofs?.policyAgent
+      ? String((toolResult as any).data.proofs.policyAgent)
+      : (toolResult as any)?.proofs?.policyAgent
+        ? String((toolResult as any).proofs.policyAgent)
+        : null;
+
+    if (policyTxHashFromTool && policyAgentFromTool) {
+      addStep(
+        "SpendingPolicy.authorize",
+        "success",
+        toolName,
+        0,
+        `policy_tx: ${policyTxHashFromTool} policy_agent: ${policyAgentFromTool}`
+      );
+    }
+
+    // 3. Record the session spend only after successful tool execution.
     const recorded = await recordSpend(sessionId, price);
     if (!recorded) {
       throw new Error(`Budget reservation failed after successful ${toolName} execution`);
@@ -245,7 +251,7 @@ async function executeToolWithPayment(
       amount: price,
       status: "success",
       tx_hash: toolResult.txHash,
-      request_payload: { args, toolName, policyTxHash },
+      request_payload: { args, toolName, policyTxHash: policyTxHashFromTool },
     });
 
     return toolResult;
@@ -259,7 +265,7 @@ async function executeToolWithPayment(
       amount: price,
       status: "failed",
       tx_hash: toolResultTxHash,
-      request_payload: { args, toolName, policyTxHash, error: String(err) },
+      request_payload: { args, toolName, policyTxHash: null, error: String(err) },
     });
 
     throw err;
@@ -322,87 +328,4 @@ async function callToolWithPayment(
   }
 }
 
-async function authorizeOnChainSpendingPolicy(toolName: ToolName): Promise<string> {
-  if (!process.env.STELLAR_PRIVATE_KEY) {
-    throw new Error("Missing STELLAR_PRIVATE_KEY for on-chain SpendingPolicy.authorize().");
-  }
-
-  const amountTokenUnits = TOOL_PRICES_TOKEN_UNITS[toolName];
-
-  const { Keypair, Contract, TransactionBuilder, Horizon, Networks, BASE_FEE, nativeToScVal } =
-    await import("@stellar/stellar-sdk");
-
-  const keypair = Keypair.fromSecret(process.env.STELLAR_PRIVATE_KEY);
-  const agentAddress = keypair.publicKey();
-
-  const horizon = new Horizon.Server("https://horizon-testnet.stellar.org");
-  const account = await horizon.loadAccount(agentAddress);
-
-  const contract = new Contract(SPENDING_POLICY_CONTRACT_ID);
-
-  // Note: contract requires `agent.require_auth()`, so the transaction source must be the `agent` address.
-  const tx = new TransactionBuilder(account, {
-    fee: BASE_FEE,
-    networkPassphrase: Networks.TESTNET,
-  })
-    .addOperation(
-      contract.call(
-        "authorize",
-        nativeToScVal(agentAddress, { type: "address" }),
-        nativeToScVal(amountTokenUnits, { type: "i128" }),
-      ),
-    )
-    .setTimeout(30)
-    .build();
-
-  tx.sign(keypair);
-  const res = await horizon.submitTransaction(tx);
-  if (!res.successful) {
-    throw new Error("Budget exceeded (on-chain spending policy)");
-  }
-
-  return res.hash;
-}
-
-async function canSpendOnChainSpendingPolicy(toolName: ToolName): Promise<boolean> {
-  if (!process.env.STELLAR_PRIVATE_KEY) {
-    throw new Error("Missing STELLAR_PRIVATE_KEY for on-chain SpendingPolicy.can_spend().");
-  }
-
-  const amountTokenUnits = TOOL_PRICES_TOKEN_UNITS[toolName];
-
-  const { Keypair, Contract, TransactionBuilder, rpc, scValToNative, Networks, BASE_FEE, Account, nativeToScVal } =
-    await import("@stellar/stellar-sdk");
-
-  const keypair = Keypair.fromSecret(process.env.STELLAR_PRIVATE_KEY);
-  const agentAddress = keypair.publicKey();
-
-  const server = new rpc.Server("https://soroban-testnet.stellar.org", { timeout: 15000 });
-  const contract = new Contract(SPENDING_POLICY_CONTRACT_ID);
-
-  // can_spend() is read-only (no require_auth), so we can simulate from a dummy source account.
-  const mockSource = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
-  const account = new Account(mockSource, "0");
-
-  const tx = new TransactionBuilder(account, {
-    fee: BASE_FEE,
-    networkPassphrase: Networks.TESTNET,
-  })
-    .addOperation(
-      contract.call(
-        "can_spend",
-        nativeToScVal(agentAddress, { type: "address" }),
-        nativeToScVal(amountTokenUnits, { type: "i128" })
-      )
-    )
-    .setTimeout(30)
-    .build();
-
-  const res = await server.simulateTransaction(tx);
-  if (!rpc.Api.isSimulationSuccess(res)) {
-    throw new Error("On-chain spending policy simulation failed");
-  }
-
-  const native = scValToNative(res.result!.retval);
-  return Boolean(native);
-}
+// On-chain spending policy enforcement moved into each paid tool endpoint.
