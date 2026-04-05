@@ -280,9 +280,12 @@ async function callToolWithPayment(
   _sessionId: string,
   _price: number
 ): Promise<{ data: unknown; txHash: string }> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  if (!baseUrl) {
+    throw new Error("Missing NEXT_PUBLIC_BASE_URL. Set it in .env.local (e.g. http://localhost:3000).");
+  }
   const targetUrl = tool === "search"
-    ? `${baseUrl}/api/tools/search?q=${encodeURIComponent(args.query || args.text)}`
+    ? `${baseUrl}/api/tools/search?q=${encodeURIComponent(args.query ?? args.text ?? "")}`
     : `${baseUrl}/api/tools/${tool}`;
 
   // Check for required environment variables
