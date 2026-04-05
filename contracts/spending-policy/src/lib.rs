@@ -14,14 +14,10 @@
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
-    Address, Env, Symbol,
+    Address, Env,
 };
 
 // ─── Storage Keys ────────────────────────────────────────────────────────────
-
-const LIMIT_KEY: Symbol = symbol_short!("LIMIT");
-#[allow(dead_code)]
-const ADMIN_KEY: Symbol = symbol_short!("ADMIN");
 
 #[contracttype]
 pub enum DataKey {
