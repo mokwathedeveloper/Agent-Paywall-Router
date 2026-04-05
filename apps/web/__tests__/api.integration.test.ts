@@ -82,7 +82,7 @@ describe("GET /api/health", () => {
     expect(body.status).toBe("healthy");
     expect(body.service).toBe("agent-paywall-router");
     expect(body.network).toBe("stellar:testnet");
-    expect(["supabase", "memory"]).toContain(body.database);
+    expect(["supabase", "in-memory"]).toContain(body.database);
     expect(body.sorobanContract).toBeDefined();
     expect(body.sorobanContract).toMatch(/^C/);
     expect(body.contractExplorer).toContain("stellar.expert");
