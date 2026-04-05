@@ -44,19 +44,25 @@ describe("MCP API", () => {
         })
       });
       
-      // Note: This will hit the local /api/tools/search endpoint.
-      // In a unit test environment without a running server, fetch might fail
-      // unless we mock it or the test environment handles local requests.
-      // For this hackathon, we assume integration tests verify the full flow.
+      // MCP execute proxies to the tool endpoint.
+      // Without a running server, the fetch inside will throw a connection error.
+      // We mock fetch to simulate the 402 response from the tool endpoint.
+      const originalFetch = global.fetch;
+      global.fetch = jest.fn().mockResolvedValue({
+        status: 402,
+        ok: false,
+        headers: new Headers({ "PAYMENT-REQUIRED": Buffer.from(JSON.stringify({ x402Version: 2, accepts: [] })).toString("base64") }),
+        body: null,
+        text: async () => JSON.stringify({ error: "Payment Required" }),
+        json: async () => ({ error: "Payment Required" }),
+      } as unknown as Response);
+
       try {
         const res = await executeTool(req);
-        // If the fetch fails because the server isn't running, this will catch.
-        // If it succeeds, it should be a 402.
-        if (res.status === 402) {
-          expect(res.headers.get("PAYMENT-REQUIRED")).toBeDefined();
-        }
-      } catch (e) {
-        // Expected failure if dev server isn't running in this environment
+        expect(res.status).toBe(402);
+        expect(res.headers.get("PAYMENT-REQUIRED")).not.toBeNull();
+      } finally {
+        global.fetch = originalFetch;
       }
     });
   });
