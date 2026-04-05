@@ -32,7 +32,7 @@ interface AppState {
   isExecuting: boolean;
   transactions: Transaction[];
   activeView: string;
-  lastResult: any;
+  lastResult: unknown;
 
   setSession: (session: DBSession | null) => void;
   setSummary: (summary: SpendingSummary | null) => void;
@@ -42,7 +42,7 @@ interface AppState {
   setIsExecuting: (isExecuting: boolean) => void;
   setTransactions: (transactions: Transaction[]) => void;
   setActiveView: (activeView: string) => void;
-  setLastResult: (lastResult: any) => void;
+  setLastResult: (lastResult: unknown) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -53,7 +53,7 @@ export const useAppStore = create<AppState>((set) => ({
   isExecuting: false,
   transactions: [],
   activeView: "workspace",
-  lastResult: null,
+  lastResult: null as unknown,
 
   setSession: (session) => set({ session }),
   setSummary: (summary) => set({ summary }),
@@ -63,7 +63,7 @@ export const useAppStore = create<AppState>((set) => ({
   setIsExecuting: (isExecuting) => set({ isExecuting }),
   setTransactions: (transactions) => set({ transactions }),
   setActiveView: (activeView) => set({ activeView }),
-  setLastResult: (lastResult) => set({ lastResult }),
+  setLastResult: (lastResult: unknown) => set({ lastResult }),
 }));
 
 export async function createSessionAPI(limit: number = 5.0): Promise<DBSession> {
