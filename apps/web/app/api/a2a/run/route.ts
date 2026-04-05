@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
     const result = await client.executeTool("search", { query: "Stellar Hacks 2026" });
 
     return NextResponse.json({ ok: true, toolsCount: tools.length, result }, { status: 200 });
-  } catch (e: any) {
-    const msg = e?.message ? String(e.message) : String(e);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
 
     if (msg.toLowerCase().includes("checksum")) {
       return NextResponse.json(
