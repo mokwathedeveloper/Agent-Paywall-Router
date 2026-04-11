@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSession, getSession, canSpend, recordSpend, addTransaction, getSpendingSummary } from "@/lib/db";
 import { TOOL_PRICES, STELLAR_NETWORK } from "@/lib/constants";
 import type { AgentStep, ToolName } from "@/lib/types";
-import { generateText, tool } from "ai";
-import { z } from "zod";
+import { generateText, jsonSchema, stepCountIs } from "ai";
 import { resolveModel } from "@/lib/llm";
 import { scanPrompt, requireSafeInput } from "@/lib/services/security";
 
@@ -45,7 +44,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    // ── Security Scan ──
     const security = scanPrompt(prompt);
     if (!security.safe) {
       addStep("Security Check", "failed", null, 0, security.reason!);
@@ -57,58 +55,59 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!resolved) {
       addStep("Initializing LLM Agent", "failed", null, 0, "No LLM API key configured");
       return NextResponse.json(
-        {
-          error: "Server misconfiguration: set OPENROUTER_API_KEY (free at openrouter.ai) or OPENAI_API_KEY",
-          steps,
-        },
+        { error: "Set OPENROUTER_API_KEY (free at openrouter.ai) or OPENAI_API_KEY", steps },
         { status: 503 }
       );
     }
     addStep("Initializing LLM Agent", "success", null, 0, `Using ${resolved.provider}`);
 
-    // Define tools for the AI SDK
+    // AI SDK v6 uses inputSchema (not parameters) with jsonSchema()
     const agentTools = {
-      search: tool({
+      search: {
         description: "Search the web for real-time information, news, or facts.",
-        parameters: z.object({
-          query: z.string().describe("The search query"),
+        inputSchema: jsonSchema<{ query: string }>({
+          type: "object",
+          properties: { query: { type: "string", description: "The search query" } },
+          required: ["query"],
+          additionalProperties: false,
         }),
-        execute: async ({ query }: { query: string }) => {
-          return await executeToolWithPayment("search", { query }, sessionId!, addStep);
-        },
-      } as unknown as Parameters<typeof tool>[0]),
-      summarize: tool({
+        execute: async ({ query }: { query: string }) =>
+          executeToolWithPayment("search", { query }, sessionId!, addStep),
+      },
+      summarize: {
         description: "Summarize a given text into key points.",
-        parameters: z.object({
-          text: z.string().describe("The text to summarize"),
+        inputSchema: jsonSchema<{ text: string }>({
+          type: "object",
+          properties: { text: { type: "string", description: "The text to summarize" } },
+          required: ["text"],
+          additionalProperties: false,
         }),
-        execute: async ({ text }: { text: string }) => {
-          return await executeToolWithPayment("summarize", { text }, sessionId!, addStep);
-        },
-      } as unknown as Parameters<typeof tool>[0]),
-      analyze: tool({
+        execute: async ({ text }: { text: string }) =>
+          executeToolWithPayment("summarize", { text }, sessionId!, addStep),
+      },
+      analyze: {
         description: "Analyze sentiment, entities, and themes in a text.",
-        parameters: z.object({
-          text: z.string().describe("The text to analyze"),
+        inputSchema: jsonSchema<{ text: string }>({
+          type: "object",
+          properties: { text: { type: "string", description: "The text to analyze" } },
+          required: ["text"],
+          additionalProperties: false,
         }),
-        execute: async ({ text }: { text: string }) => {
-          return await executeToolWithPayment("analyze", { text }, sessionId!, addStep);
-        },
-      } as unknown as Parameters<typeof tool>[0]),
+        execute: async ({ text }: { text: string }) =>
+          executeToolWithPayment("analyze", { text }, sessionId!, addStep),
+      },
     };
 
     const { model } = resolved;
-
     let finalResult: unknown = null;
     let lastToolUsed: ToolName = "search";
     let totalCost = 0;
 
-    // 25-second hard timeout — prevents hanging requests on slow Stellar RPC
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25_000);
+    const timeoutId = setTimeout(() => controller.abort(), 60_000);
 
-    let text: string;
-    let toolResults: Awaited<ReturnType<typeof generateText>>["toolResults"];
+    let text = "";
+    let toolResults: Awaited<ReturnType<typeof generateText>>["toolResults"] = [];
 
     try {
       const result = await generateText({
@@ -135,19 +134,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           "TOOL USAGE POLICY:\n" +
           "- Use search ONLY when information is unknown.\n" +
           "- Use summarize ONLY after getting long content.\n" +
-          "- Use analyze ONLY for deeper insights or comparisons.\n" +
-          "\n" +
-          "OUTPUT FORMAT (strict):\n" +
-          "Return a JSON object with: status, answer, steps[], tools_used[], transactions[].\n" +
-          "If data is missing: return status=error with reason.\n" +
-          "NEVER GUESS. NEVER HALLUCINATE.",
+          "- Use analyze ONLY for deeper insights or comparisons.",
         prompt,
         tools: agentTools,
-        maxSteps: 5,
+        stopWhen: stepCountIs(5),
         abortSignal: controller.signal,
-      } as Parameters<typeof generateText>[0]);
-      text = result.text;
-      toolResults = result.toolResults;
+      });
+      text = result.text ?? "";
+      toolResults = result.toolResults ?? [];
     } finally {
       clearTimeout(timeoutId);
     }
@@ -166,11 +160,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const spendingStep = steps.find(
       (s) => s.action === "SpendingPolicy.authorize" && s.status === "success" && s.detail.includes("policy_tx:")
     );
-    const policyTxHash =
-      spendingStep?.detail.match(/policy_tx:\s*([^\s]+)/)?.[1] ?? null;
-    const policyAgent =
-      spendingStep?.detail.match(/policy_agent:\s*([^\s]+)/)?.[1] ?? null;
-
+    const policyTxHash = spendingStep?.detail.match(/policy_tx:\s*([^\s]+)/)?.[1] ?? null;
+    const policyAgent = spendingStep?.detail.match(/policy_agent:\s*([^\s]+)/)?.[1] ?? null;
     const paymentTxStep = steps.find(s => s.status === "success" && s.detail.startsWith("tx:"));
     const resolvedTxHash = paymentTxStep?.detail.split("tx: ")[1] ?? null;
 
@@ -182,60 +173,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       result: finalResult,
       steps,
       summary: await getSpendingSummary(sessionId),
-      proofs: {
-        policyTxHash,
-        policyAgent,
-      },
+      proofs: { policyTxHash, policyAgent },
     });
+
   } catch (err) {
-    console.error("Agent execution error detail:", err);
+    console.error("Agent execution error:", err);
     const message = String(err);
-    addStep("Error", "failed", null, 0, String(err));
+    addStep("Error", "failed", null, 0, message);
 
     if (message.includes("AbortError") || message.includes("aborted")) {
       return NextResponse.json(
-        { error: "Agent timed out after 25 seconds", detail: "Stellar RPC or OpenAI took too long", steps },
+        { error: "Agent timed out after 25 seconds", detail: message, steps },
         { status: 504 }
       );
     }
-
     if (message.includes("Budget exceeded")) {
-      return NextResponse.json(
-        {
-          error: "Budget exceeded",
-          detail: message,
-          steps,
-        },
-        { status: 402 },
-      );
+      return NextResponse.json({ error: "Budget exceeded", detail: message, steps }, { status: 402 });
     }
-
-    if ((err as { name?: string })?.name === "SecurityViolation" || message.includes("Security violation")) {
-      return NextResponse.json(
-        {
-          error: "Security violation",
-          detail: message,
-          steps,
-        },
-        { status: 403 }
-      );
+    if ((err as { name?: string })?.name === "SecurityViolation") {
+      return NextResponse.json({ error: "Security violation", detail: message, steps }, { status: 403 });
     }
-
-    return NextResponse.json(
-      {
-        error: "Agent execution failed",
-        detail: message,
-        steps,
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Agent execution failed", detail: message, steps }, { status: 500 });
   }
 }
 
-/**
- * Helper to execute a tool with budget checks and x402 payment.
- * Reused by the AI SDK tool definitions.
- */
 async function executeToolWithPayment(
   toolName: ToolName,
   args: Record<string, string>,
@@ -243,27 +204,21 @@ async function executeToolWithPayment(
   addStep: (action: string, status: AgentStep["status"], tool: string | null, cost: number, detail: string) => void
 ): Promise<{ data: unknown; txHash: string }> {
   const price = TOOL_PRICES[toolName] || 0.01;
-
-  // Fail-closed scan on tool inputs (defense in depth).
-  // This prevents the model from sending malicious payloads into paid LLM tools.
   const toolInput = toolName === "search" ? args.query ?? args.text ?? "" : args.text ?? "";
   requireSafeInput(String(toolInput));
 
-  // 1. Session budget gate (non-mutating)
   const budgetOk = await canSpend(sessionId, price);
   if (!budgetOk) {
     addStep(`Budget check for ${toolName}`, "failed", toolName, price, "Insufficient budget");
     throw new Error(`Budget exceeded for ${toolName}`);
   }
   addStep(`Budget available for ${toolName}`, "success", toolName, 0, `$${price} available`);
-
-  // 2. Payment & Call
   addStep(`Requesting ${toolName}`, "payment_required", toolName, 0, "402 — Payment Required");
   addStep(`Paying $${price} USDC`, "paying", toolName, price, "Signing via @x402/stellar");
 
   let toolResultTxHash: string | null = null;
   try {
-    const toolResult = await callToolWithPayment(toolName, args, sessionId, price);
+    const toolResult = await callToolWithPayment(toolName, args);
     toolResultTxHash = toolResult.txHash;
     addStep(`${toolName} confirmed`, "success", toolName, price, `tx: ${toolResult.txHash}`);
 
@@ -272,7 +227,6 @@ async function executeToolWithPayment(
       const v = r?.data?.proofs?.policyTxHash ?? r?.proofs?.policyTxHash;
       return typeof v === "string" ? v : null;
     })();
-
     const policyAgentFromTool: string | null = (() => {
       const r = toolResult as { data?: { proofs?: { policyAgent?: unknown } }; proofs?: { policyAgent?: unknown } };
       const v = r?.data?.proofs?.policyAgent ?? r?.proofs?.policyAgent;
@@ -280,20 +234,12 @@ async function executeToolWithPayment(
     })();
 
     if (policyTxHashFromTool && policyAgentFromTool) {
-      addStep(
-        "SpendingPolicy.authorize",
-        "success",
-        toolName,
-        0,
-        `policy_tx: ${policyTxHashFromTool} policy_agent: ${policyAgentFromTool}`
-      );
+      addStep("SpendingPolicy.authorize", "success", toolName, 0,
+        `policy_tx: ${policyTxHashFromTool} policy_agent: ${policyAgentFromTool}`);
     }
 
-    // 3. Record the session spend only after successful tool execution.
     const recorded = await recordSpend(sessionId, price);
-    if (!recorded) {
-      throw new Error(`Budget reservation failed after successful ${toolName} execution`);
-    }
+    if (!recorded) throw new Error(`Budget reservation failed after successful ${toolName} execution`);
 
     await addTransaction({
       session_id: sessionId,
@@ -308,7 +254,6 @@ async function executeToolWithPayment(
     return toolResult;
   } catch (err) {
     addStep(`${toolName} failed`, "failed", toolName, price, String(err));
-
     await addTransaction({
       session_id: sessionId,
       endpoint: `/api/tools/${toolName}`,
@@ -318,76 +263,53 @@ async function executeToolWithPayment(
       tx_hash: toolResultTxHash,
       request_payload: { args, toolName, policyTxHash: null, error: String(err) },
     });
-
     throw err;
   }
 }
 
-// ─── Call Tool with Real x402 Payment ───────────────────────────────────────
-
 async function callToolWithPayment(
-  tool: string,
-  args: Record<string, string>,
-  _sessionId: string,
-  _price: number
+  toolName: string,
+  args: Record<string, string>
 ): Promise<{ data: unknown; txHash: string }> {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-  if (!baseUrl) {
-    throw new Error("Missing NEXT_PUBLIC_BASE_URL. Set it in .env.local (e.g. http://localhost:3000).");
-  }
-  const targetUrl = tool === "search"
-    ? `${baseUrl}/api/tools/search?q=${encodeURIComponent(args.query ?? args.text ?? "")}`
-    : `${baseUrl}/api/tools/${tool}`;
-
-  // Check for required environment variables
+  if (!baseUrl) throw new Error("Missing NEXT_PUBLIC_BASE_URL.");
   if (!process.env.STELLAR_PRIVATE_KEY || !process.env.STELLAR_RECEIVER_ADDRESS) {
-    throw new Error("Missing STELLAR_PRIVATE_KEY or STELLAR_RECEIVER_ADDRESS. Real payments are required.");
+    throw new Error("Missing STELLAR_PRIVATE_KEY or STELLAR_RECEIVER_ADDRESS.");
   }
 
-  try {
-    const { wrapFetchWithPayment, x402Client } = await import("@x402/fetch");
-    const { ExactStellarScheme, createEd25519Signer } = await import("@x402/stellar");
-    const { decodePaymentResponseHeader } = await import("@x402/fetch");
+  const targetUrl = toolName === "search"
+    ? `${baseUrl}/api/tools/search?q=${encodeURIComponent(args.query ?? args.text ?? "")}`
+    : `${baseUrl}/api/tools/${toolName}`;
 
-    const client = new x402Client();
-    const signer = createEd25519Signer(process.env.STELLAR_PRIVATE_KEY, STELLAR_NETWORK);
-    client.register("stellar:*", new ExactStellarScheme(signer));
-    const fetchWithPayment = wrapFetchWithPayment(fetch, client);
+  const { wrapFetchWithPayment, x402Client, decodePaymentResponseHeader } = await import("@x402/fetch");
+  const { ExactStellarScheme, createEd25519Signer } = await import("@x402/stellar");
 
-    const res = await fetchWithPayment(targetUrl, {
-      method: tool === "search" ? "GET" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: tool === "search" ? undefined : JSON.stringify({ text: args.text || args.query }),
-    });
+  const client = new x402Client();
+  const signer = createEd25519Signer(process.env.STELLAR_PRIVATE_KEY, STELLAR_NETWORK);
+  client.register("stellar:*", new ExactStellarScheme(signer));
+  const fetchWithPayment = wrapFetchWithPayment(fetch, client);
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`Tool call failed with status ${res.status}: ${errorText}`);
-    }
+  const res = await fetchWithPayment(targetUrl, {
+    method: toolName === "search" ? "GET" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: toolName === "search" ? undefined : JSON.stringify({ text: args.text || args.query }),
+  });
 
-    const data = await res.json();
-    const paymentResponse = res.headers.get("PAYMENT-RESPONSE") ?? res.headers.get("X-PAYMENT-RESPONSE");
-    if (!paymentResponse) {
-      throw new Error("Payment succeeded but no PAYMENT-RESPONSE header was returned.");
-    }
-
-    const decoded = decodePaymentResponseHeader(paymentResponse);
-    const txHash = decoded.transaction;
-    if (!txHash) throw new Error("PAYMENT-RESPONSE did not include a transaction id/hash.");
-
-    console.log(`[Stellar/x402] Payment settled on Stellar testnet`);
-    console.log(`[Stellar/x402] Tool:     ${tool}`);
-    console.log(`[Stellar/x402] Network:  stellar:testnet`);
-    console.log(`[Stellar/x402] Asset:    USDC`);
-    console.log(`[Stellar/x402] Tx hash:  stellar:${txHash}`);
-    console.log(`[Stellar/x402] Explorer: https://stellar.expert/explorer/testnet/tx/${txHash}`);
-    console.log(`[Stellar/x402] Horizon:  https://horizon-testnet.stellar.org/transactions/${txHash}`);
-
-    return { data, txHash: `stellar:${txHash}` };
-  } catch (e) {
-    console.error("Real x402 payment failed:", String(e));
-    throw new Error(`On-chain payment failed: ${String(e)}`);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Tool call failed with status ${res.status}: ${errorText}`);
   }
+
+  const data = await res.json();
+  const paymentResponse = res.headers.get("PAYMENT-RESPONSE") ?? res.headers.get("X-PAYMENT-RESPONSE");
+  if (!paymentResponse) throw new Error("Payment succeeded but no PAYMENT-RESPONSE header was returned.");
+
+  const decoded = decodePaymentResponseHeader(paymentResponse);
+  const txHash = decoded.transaction;
+  if (!txHash) throw new Error("PAYMENT-RESPONSE did not include a transaction hash.");
+
+  console.log(`[Stellar/x402] Payment settled — tool: ${toolName} — tx: stellar:${txHash}`);
+  console.log(`[Stellar/x402] Explorer: https://stellar.expert/explorer/testnet/tx/${txHash}`);
+
+  return { data, txHash: `stellar:${txHash}` };
 }
-
-// On-chain spending policy enforcement moved into each paid tool endpoint.
