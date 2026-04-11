@@ -18,6 +18,7 @@ import { BazaarView } from "./components/BazaarView";
 import { PaymentsView } from "./components/PaymentsView";
 
 const WalletConnect = dynamic(() => import("./WalletConnect"), { ssr: false, loading: () => null });
+const WalletConnectSidebar = dynamic(() => import("./WalletConnect"), { ssr: false, loading: () => null });
 
 import {
   useAppStore,
@@ -282,6 +283,8 @@ function Sidebar({
           {sessionId ?? "Initializing…"}
         </code>
       </div>
+
+      <WalletConnectSidebar />
 
       <Link href="/" className="btn btn-ghost" style={{ marginTop: "var(--s4)", justifyContent: "flex-start", padding: "var(--s2) 0", color: "var(--text-muted)" }}>
         <ArrowLeft size={14} /> Back to website
