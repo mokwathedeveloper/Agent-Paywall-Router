@@ -6,8 +6,7 @@
   "author": "Mokwa Moffat Ohuru",
   "license": "MIT",
   "workspaces": [
-    "apps/*",
-    "services/*"
+    "apps/*"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
