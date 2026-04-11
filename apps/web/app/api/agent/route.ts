@@ -4,9 +4,32 @@ import { TOOL_PRICES, STELLAR_NETWORK } from "@/lib/constants";
 import type { AgentStep, ToolName } from "@/lib/types";
 import { generateText, tool } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 
 import { scanPrompt, requireSafeInput } from "@/lib/services/security";
+
+/**
+ * Resolve the LLM model to use.
+ * Priority: OPENROUTER_API_KEY > OPENAI_API_KEY
+ * OpenRouter is free to start at https://openrouter.ai
+ */
+function resolveModel() {
+  if (process.env.OPENROUTER_API_KEY) {
+    const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+    return {
+      model: openrouter("openai/gpt-4o-mini"),
+      provider: "OpenRouter (openai/gpt-4o-mini)",
+    };
+  }
+  if (process.env.OPENAI_API_KEY) {
+    return {
+      model: openai("gpt-4o-mini"),
+      provider: "OpenAI (gpt-4o-mini)",
+    };
+  }
+  return null;
+}
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const body = await req.json().catch(() => ({})) as { prompt?: string; sessionId?: string };
@@ -54,14 +77,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     addStep("Security Check", "success", null, 0, "Prompt verified safe");
 
-    if (!process.env.OPENAI_API_KEY) {
-      addStep("Initializing LLM Agent", "failed", null, 0, "OPENAI_API_KEY is not configured");
+    const resolved = resolveModel();
+    if (!resolved) {
+      addStep("Initializing LLM Agent", "failed", null, 0, "No LLM API key configured");
       return NextResponse.json(
-        { error: "Server misconfiguration: OPENAI_API_KEY missing", steps },
+        {
+          error: "Server misconfiguration: set OPENROUTER_API_KEY (free at openrouter.ai) or OPENAI_API_KEY",
+          steps,
+        },
         { status: 503 }
       );
     }
-    addStep("Initializing LLM Agent", "success", null, 0, "Using OpenAI (GPT-4o-mini)");
+    addStep("Initializing LLM Agent", "success", null, 0, `Using ${resolved.provider}`);
 
     // Define tools for the AI SDK
     const agentTools = {
@@ -94,7 +121,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       } as unknown as Parameters<typeof tool>[0]),
     };
 
-    const model = openai("gpt-4o-mini");
+    const { model } = resolved;
 
     let finalResult: unknown = null;
     let lastToolUsed: ToolName = "search";

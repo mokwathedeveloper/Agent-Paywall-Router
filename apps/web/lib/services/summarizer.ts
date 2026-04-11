@@ -1,8 +1,21 @@
 /**
  * Summarizer tool — generates text summaries using LLM.
+ * Supports OpenRouter (free) and OpenAI. Set OPENROUTER_API_KEY or OPENAI_API_KEY.
  */
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+
+function resolveModel() {
+  if (process.env.OPENROUTER_API_KEY) {
+    const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+    return openrouter("openai/gpt-4o-mini");
+  }
+  if (process.env.OPENAI_API_KEY) {
+    return openai("gpt-4o-mini");
+  }
+  return null;
+}
 
 export interface SummaryResult {
   originalLength: number;
@@ -13,23 +26,22 @@ export interface SummaryResult {
 }
 
 export async function summarize(text: string): Promise<SummaryResult> {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY missing; summarizer requires real LLM output");
+  const model = resolveModel();
+  if (!model) {
+    throw new Error("No LLM API key configured. Set OPENROUTER_API_KEY (free at openrouter.ai) or OPENAI_API_KEY.");
   }
 
   try {
     const { text: summaryText } = await generateText({
-      model: openai("gpt-4o-mini"),
+      model,
       system: "Summarize the provided text. Return a concise summary and 3-5 key points.",
       prompt: `Text to summarize: ${text}\n\nReturn the result in JSON format with "summary" and "keyPoints" fields.`,
     });
 
-    // Simple parsing if the model doesn't return perfect JSON or if we want to be safe
     let summary = summaryText.trim();
     let keyPoints = ["Summary completed."];
 
     try {
-      // Try to extract JSON if the model wrapped it in markdown
       const jsonMatch = summaryText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
