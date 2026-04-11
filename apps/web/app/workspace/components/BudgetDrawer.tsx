@@ -41,7 +41,6 @@ function OnChainVerifier() {
       mountedRef.current = false;
       clearInterval(interval);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isVerified = data?.verified !== false;

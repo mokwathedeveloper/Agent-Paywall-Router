@@ -28,7 +28,7 @@ export class ExternalAgentClient {
   /**
    * 2. Execution Phase (with x402 payment flow)
    */
-  async executeTool(toolName: string, args: any) {
+  async executeTool(toolName: string, args: Record<string, string>) {
     console.log(`[ExternalAgent] Requesting execution for ${toolName}...`);
 
     const { wrapFetchWithPayment, x402Client } = await import("@x402/fetch");

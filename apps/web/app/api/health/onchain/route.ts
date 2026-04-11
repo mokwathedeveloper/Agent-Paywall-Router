@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     const [resSpent, resLimit] = await Promise.race([
       simulationPromise,
       timeoutPromise
-    ]) as [any, any];
+    ]) as [Awaited<ReturnType<typeof server.simulateTransaction>>, Awaited<ReturnType<typeof server.simulateTransaction>>];
 
     let spentStroops = 0;
     let limitStroops = 0;

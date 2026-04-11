@@ -64,5 +64,5 @@ export function requireSafeInput(input: string): void {
 }
 
 export function isSecurityViolationError(err: unknown): boolean {
-  return (err as any)?.name === "SecurityViolation";
+  return (err as { name?: string })?.name === "SecurityViolation";
 }

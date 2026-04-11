@@ -64,8 +64,8 @@ export async function settlePaidToolJsonWithProofs(
   policy: SpendingPolicyProof
 ): Promise<NextResponse> {
   const settled = await settlePaymentForTool(
-    vr.paymentPayload as any,
-    vr.paymentRequirements as any,
+    vr.paymentPayload,
+    vr.paymentRequirements,
     { tool: toolName }
   );
 
