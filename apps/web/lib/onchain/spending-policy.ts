@@ -2,24 +2,15 @@ import { SPENDING_POLICY_CONTRACT_ID, TOOL_PRICES_TOKEN_UNITS } from "@/lib/cons
 import type { ToolName } from "@/lib/types";
 
 function looksLikeStellarAddress(value: string): boolean {
-  // Stellar public keys are typically 56 chars base32 starting with `G` or `M` etc.
-  // For this demo we expect `G...` keys.
   return /^[GM][a-zA-Z0-9]{55}$/.test(value);
 }
 
 function findByPreferredKeys(obj: unknown, depth = 0): string | null {
-  if (depth > 6) return null;
-  if (!obj) return null;
+  if (depth > 6 || !obj) return null;
 
   const payerKeys = new Set([
-    "from",
-    "payer",
-    "sourceaccount",
-    "source",
-    "sender",
-    "account",
-    "client",
-    "initiator",
+    "from", "payer", "sourceaccount", "source",
+    "sender", "account", "client", "initiator",
   ]);
 
   if (typeof obj === "string") return null;
@@ -35,22 +26,18 @@ function findByPreferredKeys(obj: unknown, depth = 0): string | null {
   if (typeof obj === "object") {
     const o = obj as Record<string, unknown>;
     for (const [k, v] of Object.entries(o)) {
-      const keyLower = k.toLowerCase();
-      if (payerKeys.has(keyLower) && typeof v === "string" && looksLikeStellarAddress(v)) {
+      if (payerKeys.has(k.toLowerCase()) && typeof v === "string" && looksLikeStellarAddress(v)) {
         return v;
       }
-
       const found = findByPreferredKeys(v, depth + 1);
       if (found) return found;
     }
   }
-
   return null;
 }
 
 function findAnyStellarAddress(obj: unknown, depth = 0): string | null {
-  if (depth > 8) return null;
-  if (!obj) return null;
+  if (depth > 8 || !obj) return null;
   if (typeof obj === "string") return looksLikeStellarAddress(obj) ? obj : null;
 
   if (Array.isArray(obj)) {
@@ -67,11 +54,10 @@ function findAnyStellarAddress(obj: unknown, depth = 0): string | null {
       if (found) return found;
     }
   }
-
   return null;
 }
 
-export function extractPayerAddressFromPaymentPayload(paymentPayload: any): string {
+export function extractPayerAddressFromPaymentPayload(paymentPayload: unknown): string {
   const preferred = findByPreferredKeys(paymentPayload);
   const fallback = preferred ?? findAnyStellarAddress(paymentPayload);
   if (!fallback) {
@@ -106,8 +92,8 @@ export async function authorizeSpendingPolicyForPayer(toolName: ToolName, payerA
 
   const contract = new Contract(SPENDING_POLICY_CONTRACT_ID);
 
-  // Contract now requires admin auth, but we still pass `payerAddress` to attribute spend per-agent.
-  const tx = new TransactionBuilder(account, {
+  // Step 1: Build the unsigned transaction (no signing yet — simulation needs the raw tx)
+  const unsignedTx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase: Networks.TESTNET,
   })
@@ -121,25 +107,29 @@ export async function authorizeSpendingPolicyForPayer(toolName: ToolName, payerA
     .setTimeout(30)
     .build();
 
-  tx.sign(adminKeypair);
-  // Preflight simulation so we can surface the on-chain panic reason (fail-closed).
+  // Step 2: Simulate to get Soroban footprint + resource estimates
   const rpcServer = new rpc.Server("https://soroban-testnet.stellar.org", { timeout: 15000 });
-  const sim = await rpcServer.simulateTransaction(tx);
+  const sim = await rpcServer.simulateTransaction(unsignedTx);
+
   if (!rpc.Api.isSimulationSuccess(sim)) {
-    const details =
-      (sim as any)?.result?.error?.message ||
-      (sim as any)?.result?.error ||
-      JSON.stringify((sim as any)?.result ?? sim);
-    throw new Error(`SpendingPolicy.authorize() simulation failed: ${details}`);
+    const simErr = sim as unknown as { error?: string; result?: unknown };
+    const details = simErr?.error ?? JSON.stringify(simErr?.result ?? sim);
+    throw new Error(`SpendingPolicy.authorize() simulation failed: ${String(details)}`);
   }
 
-  const res = await horizon.submitTransaction(tx);
+  // Step 3: Assemble the transaction with the simulation footprint/resources
+  // This is the critical step that was missing — without it Soroban rejects the tx
+  const assembledTx = rpc.assembleTransaction(unsignedTx, sim).build();
+
+  // Step 4: Sign the assembled transaction
+  assembledTx.sign(adminKeypair);
+
+  // Step 5: Submit via Horizon
+  const res = await horizon.submitTransaction(assembledTx);
   if (!res.successful) {
-    const details =
-      (res as any)?.resultXdr ||
-      (res as any)?.resultMeta ||
-      JSON.stringify(res);
-    throw new Error(`SpendingPolicy.authorize() transaction failed: ${details}`);
+    const resErr = res as unknown as { resultXdr?: string; resultMeta?: string };
+    const details = resErr?.resultXdr ?? resErr?.resultMeta ?? JSON.stringify(res);
+    throw new Error(`SpendingPolicy.authorize() transaction failed: ${String(details)}`);
   }
 
   return {
@@ -158,4 +148,3 @@ export async function decodeX402PaymentTxHashFromHeaders(headers: Record<string,
   const txHash = decoded.transaction;
   return txHash ? `stellar:${txHash}` : null;
 }
-
