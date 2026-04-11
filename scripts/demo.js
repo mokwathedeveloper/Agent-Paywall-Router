@@ -12,7 +12,7 @@
  *   cd apps/web && npm run dev
  *
  * Requires apps/web/.env.local to have:
- *   OPENAI_API_KEY, STELLAR_PRIVATE_KEY, STELLAR_RECEIVER_ADDRESS, NEXT_PUBLIC_BASE_URL
+ *   OPENROUTER_API_KEY (free) or OPENAI_API_KEY, STELLAR_PRIVATE_KEY, STELLAR_RECEIVER_ADDRESS, NEXT_PUBLIC_BASE_URL
  */
 
 // ─── Load .env.local ─────────────────────────────────────────────────────────
@@ -97,8 +97,11 @@ async function main() {
   console.log(line("═"));
 
   // ── Pre-flight checks ──────────────────────────────────────────────────────
-  const required = ["OPENAI_API_KEY", "STELLAR_PRIVATE_KEY", "STELLAR_RECEIVER_ADDRESS", "NEXT_PUBLIC_BASE_URL"];
+  // LLM key: accept either OPENROUTER_API_KEY (free) or OPENAI_API_KEY
+  const hasLlmKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+  const required = ["STELLAR_PRIVATE_KEY", "STELLAR_RECEIVER_ADDRESS", "NEXT_PUBLIC_BASE_URL"];
   const missing = required.filter(k => !process.env[k]);
+  if (!hasLlmKey) missing.unshift("OPENROUTER_API_KEY (free at openrouter.ai) or OPENAI_API_KEY");
   if (missing.length > 0) {
     console.error(`\n${RED}${BOLD}✗ Missing environment variables:${RESET}`);
     missing.forEach(k => console.error(`  ${RED}${k}${RESET}`));
