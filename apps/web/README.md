@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agent Paywall Router — Web App
 
-## Getting Started
+> Next.js 16 application powering the Agent Paywall Router platform.
 
-First, run the development server:
+## Quick Start
 
 ```bash
+# From repo root
+npm install
+
+# Copy and fill in environment variables
+cp ../../.env.example .env.local
+
+# Start dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Required Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Description |
+|---|---|
+| `STELLAR_PRIVATE_KEY` | Agent wallet secret key (starts with `S`) — pays for tools |
+| `STELLAR_RECEIVER_ADDRESS` | Service wallet public key (starts with `G`) — receives payments |
+| `NEXT_PUBLIC_BASE_URL` | Full URL of this app (e.g. `http://localhost:3000`) |
+| `OPENAI_API_KEY` | OpenAI key for LLM orchestration (GPT-4o-mini) |
+| `FACILITATOR_URL` | x402 facilitator (default: `https://x402.org/facilitator`) |
+| `SUPABASE_URL` | Optional — Supabase for persistent storage |
+| `SUPABASE_SERVICE_ROLE_KEY` | Optional — Supabase service role key |
 
-## Learn More
+Without Supabase, the app runs in **in-memory mode** (data resets on restart). All payment flows still work.
 
-To learn more about Next.js, take a look at the following resources:
+## Key Routes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Route | Description |
+|---|---|
+| `/` | Landing page |
+| `/workspace` | Main agent workspace UI |
+| `/workspace/a2a` | Agent-to-Agent commerce demo |
+| `POST /api/agent` | LLM orchestration engine |
+| `GET /api/catalog` | Machine-readable tool discovery |
+| `GET /api/tools/search` | x402-protected search tool |
+| `POST /api/tools/summarize` | x402-protected summarize tool |
+| `POST /api/tools/analyze` | x402-protected analyze tool |
+| `POST /api/tools/mpp` | MPP-protected search tool |
+| `GET /api/mcp/tools` | MCP tool discovery |
+| `POST /api/mcp/execute` | MCP tool execution |
+| `GET /api/health/onchain` | Live Soroban contract verification |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Running Tests
 
-## Deploy on Vercel
+```bash
+# Unit + integration tests (54 tests)
+npm test
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Type check
+npx tsc --noEmit
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Payment Protocols
+
+- **x402** — HTTP-native per-request micropayments via Stellar USDC
+- **MPP** — Stripe Machine Payments Protocol on Stellar
+
+## On-Chain Contract
+
+| | |
+|---|---|
+| Contract | `CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ` |
+| Network | Stellar Testnet |
+| Explorer | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ) |
