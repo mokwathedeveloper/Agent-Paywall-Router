@@ -52,7 +52,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   // Validate env before starting — fail fast with a clear message
   const missing: string[] = [];
-  if (!process.env.OPENAI_API_KEY) missing.push("OPENAI_API_KEY");
+  if (!process.env.OPENROUTER_API_KEY && !process.env.OPENAI_API_KEY) missing.push("OPENROUTER_API_KEY (free at openrouter.ai) or OPENAI_API_KEY");
   if (!process.env.STELLAR_PRIVATE_KEY) missing.push("STELLAR_PRIVATE_KEY");
   if (!process.env.STELLAR_RECEIVER_ADDRESS) missing.push("STELLAR_RECEIVER_ADDRESS");
   if (!process.env.NEXT_PUBLIC_BASE_URL) missing.push("NEXT_PUBLIC_BASE_URL");
