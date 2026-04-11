@@ -35,7 +35,11 @@ export async function createSession(limit: number = DEFAULT_SPENDING_LIMIT): Pro
 
   if (isSupabaseConfigured && supabase) {
     const { error } = await supabase.from("sessions").insert(session);
-    if (error) console.error("Supabase insert session error:", error.message);
+    if (error) {
+      console.error("[db] Supabase insert session error:", error.message, error.code);
+      throw new Error(`Failed to persist session to Supabase: ${error.message}`);
+    }
+    console.log("[db] Session persisted to Supabase:", session.id);
   }
 
   memSessions.set(session.id, session);
@@ -44,8 +48,12 @@ export async function createSession(limit: number = DEFAULT_SPENDING_LIMIT): Pro
 
 export async function getSession(id: string): Promise<DBSession | null> {
   if (isSupabaseConfigured && supabase) {
-    const { data } = await supabase.from("sessions").select("*").eq("id", id).single();
+    const { data, error } = await supabase.from("sessions").select("*").eq("id", id).single();
+    if (error && error.code !== "PGRST116") {
+      console.error("[db] Supabase getSession error:", error.message);
+    }
     if (data) return data as DBSession;
+    return null; // not in Supabase — don't fall through to stale memory
   }
   return memSessions.get(id) || null;
 }
@@ -160,14 +168,18 @@ export async function addTransaction(
   };
 
   if (isSupabaseConfigured && supabase) {
-    // Omit id — Supabase generates UUID automatically; use returned id
     const { data, error } = await supabase
       .from("transactions")
       .insert({ ...tx })
       .select("id")
       .single();
-    if (error) console.error("Supabase insert tx error:", error.message);
-    else if (data) transaction.id = data.id;
+    if (error) {
+      console.error("[db] Supabase insert tx error:", error.message, error.code);
+    } else if (data) {
+      transaction.id = data.id;
+    }
+    memTransactions.push(transaction);
+    return transaction;
   }
 
   memTransactions.push(transaction);

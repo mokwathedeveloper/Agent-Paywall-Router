@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Copy, ExternalLink } from "lucide-react";
+import { CheckCircle2, Copy, ExternalLink, Search, FileText, BarChart3 } from "lucide-react";
 
 interface SearchResult {
   title: string;
@@ -10,98 +10,191 @@ interface SearchResult {
   snippet: string;
 }
 
-interface ToolResult {
+interface ToolData {
+  // search
   results?: SearchResult[];
+  query?: string;
+  totalResults?: number;
+  searchTime?: number;
+  // summarize
   summary?: string;
   keyPoints?: string[];
+  originalLength?: number;
+  summaryLength?: number;
+  confidence?: number;
+  // analyze
   sentiment?: "positive" | "neutral" | "negative";
   themes?: string[];
+  entities?: string[];
+  topic?: string;
+  readabilityScore?: number;
+  wordCount?: number;
+  // proofs (strip from display)
+  proofs?: unknown;
+  tool?: string;
+  cost?: unknown;
 }
 
-interface ResultStep {
+interface ToolOutput {
   tool: string;
-  result: ToolResult;
+  result: ToolData;
 }
 
-interface AgentResult extends ToolResult {
-  plan?: string;
-  steps?: ResultStep[];
+interface ResultPayload {
+  text: string;
+  toolOutputs: ToolOutput[];
 }
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
-function ToolOutput({ res, toolName }: { res: ToolResult; toolName?: string }) {
+const TOOL_ICONS: Record<string, React.ElementType> = {
+  search: Search,
+  summarize: FileText,
+  analyze: BarChart3,
+};
+
+const TOOL_COLORS: Record<string, string> = {
+  search: "var(--indigo)",
+  summarize: "var(--emerald)",
+  analyze: "var(--amber)",
+};
+
+function SearchOutput({ data }: { data: ToolData }) {
+  if (!Array.isArray(data.results) || data.results.length === 0) return null;
   return (
-    <div style={{ marginBottom: toolName ? "var(--s6)" : 0 }}>
-      {toolName && (
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)", marginBottom: "var(--s3)" }}>
-          <span className="badge badge-neutral" style={{ textTransform: "uppercase", fontSize: "0.625rem" }}>
-            {toolName} Output
-          </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--s3)" }}>
+      {data.results.map((r, i) => (
+        <div key={i} style={{
+          padding: "var(--s4)", background: "var(--bg-card)",
+          borderRadius: "var(--r-lg)", border: "1px solid var(--border-dim)",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "flex-start",
+            justifyContent: "space-between", gap: "var(--s3)", marginBottom: "var(--s2)",
+          }}>
+            <span style={{ fontWeight: 600, fontSize: "0.9375rem", lineHeight: 1.3 }}>{r.title}</span>
+            <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0, marginTop: 2 }}>
+              <ExternalLink size={13} color="var(--emerald)" />
+            </a>
+          </div>
+          <p className="body" style={{ margin: 0, fontSize: "0.8125rem" }}>{r.snippet}</p>
         </div>
-      )}
-
-      {Array.isArray(res.results) && res.results.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--s3)" }}>
-          {res.results.map((r, i) => (
-            <div key={i} style={{
-              padding: "var(--s4)", background: "var(--bg-card)",
-              borderRadius: "var(--r-lg)", border: "1px solid var(--border-dim)",
-            }}>
-              <div style={{
-                display: "flex", alignItems: "flex-start",
-                justifyContent: "space-between", gap: "var(--s3)", marginBottom: "var(--s2)",
-              }}>
-                <span style={{ fontWeight: 600, fontSize: "0.9375rem", lineHeight: 1.3 }}>{r.title}</span>
-                <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0, marginTop: 2 }}>
-                  <ExternalLink size={13} color="var(--emerald)" />
-                </a>
-              </div>
-              <p className="body" style={{ margin: 0, fontSize: "0.8125rem" }}>{r.snippet}</p>
-            </div>
-          ))}
+      ))}
+      {data.searchTime && (
+        <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+          {data.totalResults} results · {data.searchTime}ms
         </div>
-      )}
-
-      {typeof res.summary === "string" && !Array.isArray(res.results) && (
-        <div>
-          <p className="body" style={{ marginBottom: "var(--s4)" }}>{res.summary}</p>
-          {Array.isArray(res.keyPoints) && (
-            <ul style={{ display: "flex", flexDirection: "column", gap: "var(--s2)", paddingLeft: "var(--s4)" }}>
-              {res.keyPoints.map((kp, i) => (
-                <li key={i} style={{ fontSize: "0.875rem", color: "var(--text-body)" }}>{kp}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {typeof res.sentiment === "string" && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--s2)" }}>
-          <span className={`badge badge-${res.sentiment === "positive" ? "emerald" : res.sentiment === "negative" ? "rose" : "amber"}`}>
-            Sentiment: {res.sentiment}
-          </span>
-          {Array.isArray(res.themes) && res.themes.map((t) => (
-            <span key={t} className="badge badge-indigo">{t}</span>
-          ))}
-        </div>
-      )}
-
-      {!res.results && !res.summary && !res.sentiment && (
-        <pre style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--text-body)", whiteSpace: "pre-wrap" }}>
-          {JSON.stringify(res, null, 2)}
-        </pre>
       )}
     </div>
   );
 }
 
+function SummarizeOutput({ data }: { data: ToolData }) {
+  if (!data.summary) return null;
+  return (
+    <div>
+      <p className="body" style={{ marginBottom: "var(--s4)", lineHeight: 1.7 }}>{data.summary}</p>
+      {Array.isArray(data.keyPoints) && data.keyPoints.length > 0 && (
+        <div>
+          <div className="caption" style={{ marginBottom: "var(--s2)" }}>Key Points</div>
+          <ul style={{ display: "flex", flexDirection: "column", gap: "var(--s2)", paddingLeft: "var(--s4)", margin: 0 }}>
+            {data.keyPoints.map((kp, i) => (
+              <li key={i} style={{ fontSize: "0.875rem", color: "var(--text-body)", lineHeight: 1.5 }}>{kp}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {data.confidence && (
+        <div style={{ marginTop: "var(--s3)", fontSize: "0.75rem", color: "var(--text-dim)" }}>
+          Confidence: {Math.round(data.confidence * 100)}%
+          {data.originalLength && ` · ${data.originalLength} → ${data.summaryLength} chars`}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnalyzeOutput({ data }: { data: ToolData }) {
+  if (!data.sentiment && !data.topic) return null;
+  const sentimentColor = data.sentiment === "positive" ? "var(--emerald)" : data.sentiment === "negative" ? "var(--rose)" : "var(--amber)";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--s4)" }}>
+      {data.topic && (
+        <div>
+          <div className="caption" style={{ marginBottom: "var(--s1)" }}>Topic</div>
+          <p className="body" style={{ margin: 0 }}>{data.topic}</p>
+        </div>
+      )}
+      {data.summary && (
+        <div>
+          <div className="caption" style={{ marginBottom: "var(--s1)" }}>Summary</div>
+          <p className="body" style={{ margin: 0, lineHeight: 1.7 }}>{data.summary}</p>
+        </div>
+      )}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--s2)" }}>
+        {data.sentiment && (
+          <span style={{
+            padding: "3px 10px", borderRadius: "var(--r-full)", fontSize: "0.75rem",
+            fontWeight: 600, background: `${sentimentColor}18`, color: sentimentColor,
+            border: `1px solid ${sentimentColor}40`,
+          }}>
+            {data.sentiment} sentiment
+          </span>
+        )}
+        {Array.isArray(data.themes) && data.themes.map((t) => (
+          <span key={t} className="badge badge-indigo">{t}</span>
+        ))}
+        {Array.isArray(data.entities) && data.entities.map((e) => (
+          <span key={e} className="badge badge-neutral">{e}</span>
+        ))}
+      </div>
+      {(data.readabilityScore || data.wordCount) && (
+        <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+          {data.wordCount && `${data.wordCount} words`}
+          {data.readabilityScore && ` · Readability: ${data.readabilityScore}/100`}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolSection({ output }: { output: ToolOutput }) {
+  const Icon = TOOL_ICONS[output.tool] ?? Search;
+  const color = TOOL_COLORS[output.tool] ?? "var(--text-muted)";
+  const data = output.result as ToolData;
+
+  return (
+    <div style={{ marginBottom: "var(--s6)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)", marginBottom: "var(--s3)" }}>
+        <div style={{
+          width: 22, height: 22, borderRadius: "var(--r-sm)",
+          background: `${color}18`, display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Icon size={12} color={color} />
+        </div>
+        <span className="badge badge-neutral" style={{ textTransform: "uppercase", fontSize: "0.625rem" }}>
+          {output.tool} output
+        </span>
+      </div>
+      {output.tool === "search" && <SearchOutput data={data} />}
+      {output.tool === "summarize" && <SummarizeOutput data={data} />}
+      {output.tool === "analyze" && <AnalyzeOutput data={data} />}
+    </div>
+  );
+}
+
 export function ResultPanel({ result }: { result: unknown }) {
-  const data = result as AgentResult;
   const [copied, setCopied] = useState(false);
 
+  // Normalise: accept both the new { text, toolOutputs } shape and legacy plain string
+  const payload: ResultPayload = typeof result === "object" && result !== null && "text" in result
+    ? result as ResultPayload
+    : { text: String(result ?? ""), toolOutputs: [] };
+
+  const hasToolOutputs = Array.isArray(payload.toolOutputs) && payload.toolOutputs.length > 0;
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+    navigator.clipboard.writeText(payload.text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -118,6 +211,7 @@ export function ResultPanel({ result }: { result: unknown }) {
         overflow: "hidden",
       }}
     >
+      {/* Header */}
       <div style={{
         padding: "var(--s4) var(--s5)", borderBottom: "1px solid var(--border-dim)",
         background: "var(--bg-card)", display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -132,21 +226,25 @@ export function ResultPanel({ result }: { result: unknown }) {
       </div>
 
       <div style={{ padding: "var(--s5)" }}>
-        {data.plan && (
-          <div style={{
-            marginBottom: "var(--s6)", padding: "var(--s4)",
-            background: "var(--bg-deep)", borderRadius: "var(--r-lg)", border: "1px solid var(--border-dim)",
-          }}>
-            <div className="caption" style={{ marginBottom: "var(--s2)" }}>Agent Strategy</div>
-            <p className="body" style={{ margin: 0, fontSize: "0.875rem", fontStyle: "italic" }}>
-              &quot;{data.plan}&quot;
+        {/* Structured tool outputs */}
+        {hasToolOutputs && payload.toolOutputs.map((o, i) => (
+          <ToolSection key={`${o.tool}-${i}`} output={o} />
+        ))}
+
+        {/* LLM text answer */}
+        {payload.text && (
+          <div style={hasToolOutputs ? {
+            marginTop: "var(--s2)", paddingTop: "var(--s4)",
+            borderTop: "1px solid var(--border-dim)",
+          } : {}}>
+            {hasToolOutputs && (
+              <div className="caption" style={{ marginBottom: "var(--s3)" }}>Agent Summary</div>
+            )}
+            <p className="body" style={{ margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.7 }}>
+              {payload.text}
             </p>
           </div>
         )}
-
-        {Array.isArray(data.steps)
-          ? data.steps.map((s) => <ToolOutput key={s.tool} res={s.result} toolName={s.tool} />)
-          : <ToolOutput res={data} />}
       </div>
     </motion.div>
   );

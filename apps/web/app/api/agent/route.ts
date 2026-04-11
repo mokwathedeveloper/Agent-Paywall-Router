@@ -6,6 +6,8 @@ import { generateText, jsonSchema, stepCountIs } from "ai";
 import { resolveModel } from "@/lib/llm";
 import { scanPrompt, requireSafeInput } from "@/lib/services/security";
 
+export const maxDuration = 90;
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const body = await req.json().catch(() => ({})) as { prompt?: string; sessionId?: string };
   const { prompt, sessionId: reqSessionId } = body;
@@ -104,7 +106,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     let totalCost = 0;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60_000);
+    const timeoutId = setTimeout(() => controller.abort(), 80_000);
 
     let text = "";
     let toolResults: Awaited<ReturnType<typeof generateText>>["toolResults"] = [];
@@ -155,6 +157,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Extract structured tool data to send alongside the LLM text
+    const toolOutputs = toolResults.map((r) => ({
+      tool: r.toolName,
+      result: (r as unknown as { result: { data?: unknown } }).result?.data
+        ?? (r as unknown as { result: unknown }).result,
+    }));
+
     addStep("Done", "success", lastToolUsed, 0, "All tools executed and results aggregated");
 
     const spendingStep = steps.find(
@@ -171,6 +180,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       cost: totalCost,
       txHash: resolvedTxHash,
       result: finalResult,
+      toolOutputs,
       steps,
       summary: await getSpendingSummary(sessionId),
       proofs: { policyTxHash, policyAgent },
@@ -183,7 +193,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     if (message.includes("AbortError") || message.includes("aborted")) {
       return NextResponse.json(
-        { error: "Agent timed out after 25 seconds", detail: message, steps },
+        { error: "Agent timed out", detail: message, steps },
         { status: 504 }
       );
     }
@@ -271,7 +281,9 @@ async function callToolWithPayment(
   toolName: string,
   args: Record<string, string>
 ): Promise<{ data: unknown; txHash: string }> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+    ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null);
   if (!baseUrl) throw new Error("Missing NEXT_PUBLIC_BASE_URL.");
   if (!process.env.STELLAR_PRIVATE_KEY || !process.env.STELLAR_RECEIVER_ADDRESS) {
     throw new Error("Missing STELLAR_PRIVATE_KEY or STELLAR_RECEIVER_ADDRESS.");

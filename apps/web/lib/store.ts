@@ -96,7 +96,20 @@ export async function executeAgentTask(prompt: string, sessionId: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, sessionId }),
   });
-  if (!res.ok) throw new Error("Agent execution failed");
+
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    console.error("[store.ts] Agent execution failed on server:", {
+      status: res.status,
+      error: errorBody.error,
+      detail: errorBody.detail,
+      step: errorBody.step,
+      stack: errorBody.stack,
+    });
+    const message = errorBody.detail || errorBody.error || "Agent execution failed";
+    throw new Error(message);
+  }
+
   return res.json();
 }
 

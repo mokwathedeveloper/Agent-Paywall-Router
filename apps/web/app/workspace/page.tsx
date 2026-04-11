@@ -31,7 +31,7 @@ import { SPENDING_POLICY_CONTRACT_ID } from "@/lib/constants";
 
 export default function WorkspacePage() {
   const {
-    session, summary, steps, catalog, isExecuting, transactions, activeView,
+    session, summary, steps, catalog, isExecuting, activeView,
     setSession, setSummary, setSteps, setCatalog, setIsExecuting,
     setLastResult, setTransactions, setActiveView, clearSteps, lastResult,
   } = useAppStore();
@@ -39,36 +39,70 @@ export default function WorkspacePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
 
-  // Initialize session once
+  // Initialize session — reuse persisted session or create new one
   useEffect(() => {
     if (session) return;
     let cancelled = false;
-    createSessionAPI(5.0)
-      .then((s) => {
-        if (cancelled || !s?.id) return;
-        setSession(s);
-        setSummary({
-          sessionId: s.id,
-          limit: s.spending_limit,
-          used: s.used_amount,
-          remaining: s.spending_limit - s.used_amount,
-          percentage: 0,
-          transactionCount: 0,
-          expiresAt: s.expires_at,
-        });
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setInitError(String(err));
+
+    async function init() {
+      const storedId = localStorage.getItem("agentpay_session_id");
+
+      if (storedId) {
+        try {
+          const res = await fetch(`/api/sessions?id=${storedId}`);
+          if (res.ok) {
+            const existing = await res.json();
+            if (!cancelled && existing?.id) {
+              // Strip the nested summary before setting session
+              const { summary: existingSummary, ...sessionData } = existing;
+              setSession(sessionData);
+              if (existingSummary) {
+                setSummary(existingSummary);
+              } else {
+                setSummary({
+                  sessionId: existing.id,
+                  limit: existing.spending_limit,
+                  used: existing.used_amount,
+                  remaining: existing.spending_limit - existing.used_amount,
+                  percentage: Math.round((existing.used_amount / existing.spending_limit) * 100),
+                  transactionCount: 0,
+                  expiresAt: existing.expires_at,
+                });
+              }
+              const txData = await fetchTransactions(storedId);
+              if (!cancelled) setTransactions(txData.transactions);
+              return;
+            }
+          }
+        } catch {
+          // stored session gone — fall through to create new
+          localStorage.removeItem("agentpay_session_id");
+        }
+      }
+
+      const s = await createSessionAPI(5.0);
+      if (cancelled || !s?.id) return;
+      localStorage.setItem("agentpay_session_id", s.id);
+      localStorage.removeItem("agentpay_session_spent");
+      setSession(s);
+      setSummary({
+        sessionId: s.id,
+        limit: s.spending_limit,
+        used: s.used_amount,
+        remaining: s.spending_limit - s.used_amount,
+        percentage: 0,
+        transactionCount: 0,
+        expiresAt: s.expires_at,
       });
+    }
+
+    init().catch((err: unknown) => { if (!cancelled) setInitError(String(err)); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load transactions and tools once
+  // Load tools once
   useEffect(() => {
-    fetchTransactions()
-      .then((data) => { if (data?.transactions) setTransactions(data.transactions); })
-      .catch(console.error);
     fetchTools()
       .then((tools) => { if (tools) setCatalog(tools); })
       .catch(console.error);
@@ -88,9 +122,9 @@ export default function WorkspacePage() {
           await new Promise((r) => setTimeout(r, 400));
           setSteps(data.steps.slice(0, i + 1));
         }
-        setLastResult(data.result);
+        setLastResult({ text: data.result, toolOutputs: data.toolOutputs ?? [] });
         if (data.summary) setSummary(data.summary);
-        const txData = await fetchTransactions();
+        const txData = await fetchTransactions(session.id);
         setTransactions(txData.transactions);
       } catch (err) {
         console.error("Execution failed:", err);
@@ -158,7 +192,7 @@ export default function WorkspacePage() {
           )}
           {activeView === "payments" && (
             <motion.div key="payments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, minHeight: 0 }}>
-              <PaymentsView transactions={transactions} />
+              <PaymentsView />
             </motion.div>
           )}
           {activeView === "settings" && (
@@ -310,9 +344,9 @@ function EmptyState() {
         await new Promise((r) => setTimeout(r, 400));
         setSteps(data.steps.slice(0, i + 1));
       }
-      setLastResult(data.result);
+      setLastResult({ text: data.result, toolOutputs: data.toolOutputs ?? [] });
       if (data.summary) setSummary(data.summary);
-      const txData = await fetchTransactions();
+      const txData = await fetchTransactions(session.id);
       setTransactions(txData.transactions);
     } catch (err) {
       console.error(err);

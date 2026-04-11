@@ -107,9 +107,22 @@ export async function authorizeSpendingPolicyForPayer(toolName: ToolName, payerA
     .setTimeout(30)
     .build();
 
-  // Step 2: Simulate to get Soroban footprint + resource estimates
-  const rpcServer = new rpc.Server("https://soroban-testnet.stellar.org", { timeout: 15000 });
-  const sim = await rpcServer.simulateTransaction(unsignedTx);
+  // Step 2: Simulate to get Soroban footprint + resource estimates (with retry for DNS flakiness)
+  const rpcServer = new rpc.Server("https://soroban-testnet.stellar.org", { timeout: 20000 });
+  let sim: Awaited<ReturnType<typeof rpcServer.simulateTransaction>>;
+  let lastSimError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      sim = await rpcServer.simulateTransaction(unsignedTx);
+      lastSimError = undefined;
+      break;
+    } catch (e) {
+      lastSimError = e;
+      if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+    }
+  }
+  if (lastSimError !== undefined) throw lastSimError;
+  sim = sim!;
 
   if (!rpc.Api.isSimulationSuccess(sim)) {
     const simErr = sim as unknown as { error?: string; result?: unknown };
@@ -119,7 +132,7 @@ export async function authorizeSpendingPolicyForPayer(toolName: ToolName, payerA
 
   // Step 3: Assemble the transaction with the simulation footprint/resources
   // This is the critical step that was missing — without it Soroban rejects the tx
-  const assembledTx = rpc.assembleTransaction(unsignedTx, sim).build();
+  const assembledTx = (rpc.assembleTransaction(unsignedTx, sim) as any).build();
 
   // Step 4: Sign the assembled transaction
   assembledTx.sign(adminKeypair);

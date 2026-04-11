@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Search, FileText, BarChart3, Zap,
-  CheckCircle2, AlertCircle, Clock, CreditCard, ExternalLink,
+  CheckCircle2, AlertCircle, Clock, CreditCard, ExternalLink, Loader2,
 } from "lucide-react";
 import type { DBTransaction } from "@/lib/types";
 
@@ -14,18 +15,34 @@ const TOOL_COLOR: Record<string, string> = {
   search: "var(--indigo)", summarize: "var(--emerald)", analyze: "var(--amber)",
 };
 
-interface Props {
-  transactions: DBTransaction[];
-}
+export function PaymentsView() {
+  const [transactions, setTransactions] = useState<DBTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export function PaymentsView({ transactions }: Props) {
+  useEffect(() => {
+    fetch("/api/transactions")
+      .then(r => r.json())
+      .then(d => setTransactions(d.transactions ?? []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
   const totalSpent = transactions
-    .filter((t) => t.status === "success")
+    .filter(t => t.status === "success")
     .reduce((s, t) => s + t.amount, 0);
 
   const successRate = transactions.length
-    ? Math.round((transactions.filter((t) => t.status === "success").length / transactions.length) * 100)
+    ? Math.round((transactions.filter(t => t.status === "success").length / transactions.length) * 100)
     : 0;
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300, gap: "var(--s3)", color: "var(--text-muted)" }}>
+        <Loader2 size={20} style={{ animation: "spin 1s linear infinite" }} />
+        <span className="body">Loading transactions…</span>
+      </div>
+    );
+  }
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "var(--s6) var(--s8)" }}>
@@ -35,7 +52,7 @@ export function PaymentsView({ transactions }: Props) {
           { label: "Total Transactions", value: transactions.length },
           { label: "Total Spent", value: `$${totalSpent.toFixed(4)}` },
           { label: "Success Rate", value: `${successRate}%` },
-        ].map((s) => (
+        ].map(s => (
           <div key={s.label} style={{
             flex: 1, minWidth: 120,
             background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
@@ -78,14 +95,8 @@ export function PaymentsView({ transactions }: Props) {
                   borderRadius: "var(--r-lg)",
                   transition: "border-color 150ms ease, background 150ms ease",
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--border)";
-                  e.currentTarget.style.background = "var(--bg-card)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--border-dim)";
-                  e.currentTarget.style.background = "var(--bg-surface)";
-                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-card)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-dim)"; e.currentTarget.style.background = "var(--bg-surface)"; }}
               >
                 <div style={{
                   width: 36, height: 36, borderRadius: "var(--r-md)",
@@ -100,7 +111,7 @@ export function PaymentsView({ transactions }: Props) {
                     {tx.tool_name}
                   </div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-                    {tx.created_at
+                    {tx.session_id} · {tx.created_at
                       ? new Date(tx.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
                       : "—"}
                   </div>
