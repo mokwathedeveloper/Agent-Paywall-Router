@@ -175,7 +175,9 @@ export default function WorkspacePage() {
               <div style={{ padding: "var(--s6)", borderBottom: "1px solid var(--border-dim)", flexShrink: 0 }}>
                 <PromptBox onSubmit={handleExecute} isExecuting={isExecuting} />
               </div>
-              <div className="timeline-area">
+              <div className="timeline-area" ref={(el) => {
+                if (el && lastResult) el.scrollTop = el.scrollHeight;
+              }}>
                 {steps.length === 0 && !isExecuting ? (
                   <EmptyState />
                 ) : (
