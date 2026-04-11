@@ -132,6 +132,14 @@ export async function authorizeSpendingPolicyForPayer(toolName: ToolName, payerA
     throw new Error(`SpendingPolicy.authorize() transaction failed: ${String(details)}`);
   }
 
+  console.log(`[Stellar/Soroban] SpendingPolicy.authorize() confirmed`);
+  console.log(`[Stellar/Soroban] Network:       stellar:testnet`);
+  console.log(`[Stellar/Soroban] Contract:      ${SPENDING_POLICY_CONTRACT_ID}`);
+  console.log(`[Stellar/Soroban] Agent:         ${payerAddress}`);
+  console.log(`[Stellar/Soroban] Amount:        ${amountTokenUnits} stroops ($${(Number(amountTokenUnits) / 10_000_000).toFixed(2)} USDC)`);
+  console.log(`[Stellar/Soroban] Policy tx:     ${res.hash}`);
+  console.log(`[Stellar/Soroban] Explorer:      https://stellar.expert/explorer/testnet/tx/${res.hash}`);
+
   return {
     policyTxHash: res.hash,
     policyAgent: payerAddress,

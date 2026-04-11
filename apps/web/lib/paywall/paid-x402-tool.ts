@@ -71,6 +71,16 @@ export async function settlePaidToolJsonWithProofs(
 
   const paymentTxHash = await decodeX402PaymentTxHashFromHeaders(settled.headers);
 
+  console.log(`[Stellar/x402] Tool unlocked: ${toolName}`);
+  console.log(`[Stellar/x402] Cost:          ${costDisplay} USDC`);
+  console.log(`[Stellar/x402] Payment tx:    ${paymentTxHash ?? "(hash not in headers)"}`);
+  console.log(`[Stellar/x402] Policy tx:     ${policy.policyTxHash}`);
+  console.log(`[Stellar/x402] Policy agent:  ${policy.policyAgent}`);
+  if (paymentTxHash) {
+    const hash = paymentTxHash.replace("stellar:", "");
+    console.log(`[Stellar/x402] Verify:        https://stellar.expert/explorer/testnet/tx/${hash}`);
+  }
+
   return NextResponse.json(
     {
       tool: toolName,

@@ -1,3 +1,18 @@
+/**
+ * POST /api/tools/analyze
+ *
+ * x402-protected sentiment + entity analysis endpoint.
+ * Payment flow (Stellar testnet):
+ *   1. No receipt → returns HTTP 402 + PAYMENT-REQUIRED header (x402 v2 spec)
+ *   2. Agent signs USDC micropayment via @x402/stellar ExactStellarScheme
+ *   3. Agent retries with x402-receipt header
+ *   4. Server verifies receipt via x402.org/facilitator
+ *   5. Server calls Soroban SpendingPolicy.authorize(agent, 300000 stroops)
+ *   6. Server settles payment and returns analysis + tx proofs
+ *
+ * Cost: $0.03 USDC (300,000 stroops) on Stellar testnet
+ * Asset: CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { analyze } from "@/lib/services/analyzer";
 import { verifyPaidOrReturn402 } from "@/lib/paywall/x402";

@@ -372,6 +372,14 @@ async function callToolWithPayment(
     const txHash = decoded.transaction;
     if (!txHash) throw new Error("PAYMENT-RESPONSE did not include a transaction id/hash.");
 
+    console.log(`[Stellar/x402] Payment settled on Stellar testnet`);
+    console.log(`[Stellar/x402] Tool:     ${tool}`);
+    console.log(`[Stellar/x402] Network:  stellar:testnet`);
+    console.log(`[Stellar/x402] Asset:    USDC`);
+    console.log(`[Stellar/x402] Tx hash:  stellar:${txHash}`);
+    console.log(`[Stellar/x402] Explorer: https://stellar.expert/explorer/testnet/tx/${txHash}`);
+    console.log(`[Stellar/x402] Horizon:  https://horizon-testnet.stellar.org/transactions/${txHash}`);
+
     return { data, txHash: `stellar:${txHash}` };
   } catch (e) {
     console.error("Real x402 payment failed:", String(e));

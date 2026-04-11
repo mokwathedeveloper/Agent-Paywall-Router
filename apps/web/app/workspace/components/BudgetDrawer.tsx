@@ -17,9 +17,7 @@ function OnChainVerifier() {
   const [loading, setLoading] = useState(false);
   const mountedRef = useRef(true);
 
-  const address = "GB77G4BRHXR6ZA7Z3KAPXXDJPD7QCLPZBILBFMQ6NYHJKVEJS47NLBAG";
-
-  const verify = async () => {
+  const verify = async (address: string) => {
     if (!mountedRef.current) return;
     setLoading(true);
     try {
@@ -35,11 +33,21 @@ function OnChainVerifier() {
 
   useEffect(() => {
     mountedRef.current = true;
-    verify();
-    const interval = setInterval(verify, 60_000);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    // Fetch the real agent wallet address from the health endpoint
+    fetch("/api/health")
+      .then(r => r.json())
+      .then((h: { agentWallet?: string }) => {
+        const addr = h.agentWallet;
+        if (addr && addr !== "not configured" && mountedRef.current) {
+          verify(addr);
+          interval = setInterval(() => verify(addr), 60_000);
+        }
+      })
+      .catch(() => null);
     return () => {
       mountedRef.current = false;
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
   }, []);
 
@@ -83,7 +91,14 @@ function OnChainVerifier() {
             </span>
           </div>
           <div style={{ fontSize: "0.5625rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            Contract: {data?.contract?.slice(0, 8)}…
+            <a
+              href={`https://stellar.expert/explorer/testnet/contract/${data?.contract}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--emerald)", textDecoration: "none" }}
+            >
+              Contract: {data?.contract?.slice(0, 8)}…
+            </a>
           </div>
         </>
       )}
