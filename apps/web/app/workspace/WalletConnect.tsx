@@ -29,9 +29,19 @@ export default function WalletConnect() {
     try {
       const { requestAccess, isConnected, getNetwork } = await import("@stellar/freighter-api");
 
-      const status = await isConnected();
+      // Retry isConnected up to 3 times — extension may not have injected yet
+      let status = await isConnected();
       if (!status.isConnected) {
-        setError("Freighter not detected. Install it at freighter.app");
+        await new Promise(r => setTimeout(r, 500));
+        status = await isConnected();
+      }
+      if (!status.isConnected) {
+        await new Promise(r => setTimeout(r, 1000));
+        status = await isConnected();
+      }
+
+      if (!status.isConnected) {
+        setError("Freighter not detected. Install it at freighter.app, unlock it, then try again.");
         return;
       }
 
