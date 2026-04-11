@@ -295,9 +295,102 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### 5. Run the demo
 
-**Browser:** Open [http://localhost:3000/workspace](http://localhost:3000/workspace) and type a prompt.
+**Option A — CLI (recommended for judges)**
 
-**curl:**
+With the dev server running in one terminal, open a second terminal:
+
+```bash
+# Default task: search + summarize Stellar micropayments
+npm run demo
+
+# Custom task
+npm run demo:analyze
+
+# Any prompt
+node scripts/demo.js "Search for Stellar DeFi and analyze the key themes"
+```
+
+Expected output:
+
+```
+════════════════════════════════════════════════════════════════════════
+  Agent Paywall Router — Live Demo
+  Stellar Hacks: Agents 2026
+════════════════════════════════════════════════════════════════════════
+
+  Checking server at http://localhost:3000...
+  ✓ Server healthy — in-memory · stellar:testnet
+
+────────────────────────────────────────────────────────────────────────
+  Task
+  "Search for Stellar blockchain micropayments and summarize the key points"
+────────────────────────────────────────────────────────────────────────
+
+  Execution Trace
+────────────────────────────────────────────────────────────────────────
+  ✓  Security Check                                    12ms
+     Prompt verified safe
+  ✓  Initializing LLM Agent                            14ms
+     Using OpenAI (GPT-4o-mini)
+  ✓  Budget available for search                       18ms
+     $0.01 available
+  ⟳  Requesting search                                 19ms
+     402 — Payment Required
+  ⟳  Paying $0.01 USDC  $0.01                         20ms
+     Signing via @x402/stellar
+  ✓  search confirmed  $0.01                           4821ms
+     tx: stellar:abc123def456...
+  ✓  SpendingPolicy.authorize                          6203ms
+     policy_tx: ghi789... policy_agent: GABC...
+  ✓  Budget available for summarize                    6210ms
+     $0.02 available
+  ⟳  Paying $0.02 USDC  $0.02                         6211ms
+     Signing via @x402/stellar
+  ✓  summarize confirmed  $0.02                        11432ms
+     tx: stellar:xyz987...
+  ✓  Done                                              11440ms
+     All tools executed and results aggregated
+────────────────────────────────────────────────────────────────────────
+
+  Payment Proof
+────────────────────────────────────────────────────────────────────────
+  ✓ Real Stellar transaction confirmed
+
+  Tool used:       summarize
+  Total cost:      $0.03 USDC
+
+  Payment tx:      stellar:abc123def456...
+  Policy tx:       ghi789jkl012...
+  Agent address:   GABC...
+
+  Verify on-chain:
+  https://stellar.expert/explorer/testnet/tx/abc123def456...
+  https://horizon-testnet.stellar.org/transactions/abc123def456...
+  https://stellar.expert/explorer/testnet/tx/ghi789jkl012...
+
+════════════════════════════════════════════════════════════════════════
+  SUCCESS  11891ms total
+════════════════════════════════════════════════════════════════════════
+```
+
+**Option B — API endpoint**
+
+```bash
+# Default task
+curl -s "http://localhost:3000/api/demo/run" | jq .
+
+# Custom task
+curl -s "http://localhost:3000/api/demo/run?task=Search+for+Stellar+DeFi+and+analyze" | jq .
+```
+
+The response includes `payment.txHash`, `payment.explorerLinks`, and the full `steps` array.
+
+**Option C — Browser UI**
+
+Open [http://localhost:3000/workspace](http://localhost:3000/workspace) and type a prompt.
+
+**Option D — curl direct to agent**
+
 ```bash
 curl -s -X POST "http://localhost:3000/api/agent" \
   -H "Content-Type: application/json" \
@@ -327,6 +420,7 @@ npx tsc --noEmit
 
 | Endpoint | Method | Description | Cost |
 |---|---|---|---|
+| `/api/demo/run` | GET | End-to-end demo — runs a full agent task with payment proof | varies |
 | `/api/agent` | POST | LLM orchestration — multi-step tool chaining | varies |
 | `/api/tools/search` | GET | x402-protected web search (DuckDuckGo + Wikipedia) | $0.01 USDC |
 | `/api/tools/summarize` | POST | x402-protected LLM summarization | $0.02 USDC |
@@ -439,6 +533,7 @@ apps/web/
 ├── app/
 │   ├── api/
 │   │   ├── agent/          # LLM orchestration + x402 payment execution
+│   │   ├── demo/           # End-to-end demo entrypoint (GET /api/demo/run)
 │   │   ├── catalog/        # Machine-readable tool discovery
 │   │   ├── tools/          # x402-protected endpoints (search, summarize, analyze, mpp)
 │   │   ├── mcp/            # Model Context Protocol server
@@ -465,6 +560,8 @@ apps/web/
 contracts/
 └── spending-policy/        # Soroban Rust contract + 6 passing tests
     └── src/lib.rs
+scripts/
+└── demo.js                 # CLI demo script (node scripts/demo.js)
 ```
 
 ---

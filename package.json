@@ -11,7 +11,10 @@
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspaces",
-    "lint": "npm run lint --workspaces"
+    "lint": "npm run lint --workspaces",
+    "demo": "node scripts/demo.js",
+    "demo:search": "node scripts/demo.js \"Search for Stellar blockchain micropayments and summarize the key points\"",
+    "demo:analyze": "node scripts/demo.js \"Search for x402 payment protocol and analyze the main themes\""
   },
   "engines": {
     "node": ">=20.0.0"
