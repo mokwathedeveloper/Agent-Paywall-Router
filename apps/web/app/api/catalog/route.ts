@@ -19,9 +19,12 @@ import {
   SPENDING_POLICY_CONTRACT_ID,
 } from "@/lib/constants";
 
-export async function GET() {
+export async function GET(req: Request) {
   const receiver = process.env.STELLAR_RECEIVER_ADDRESS ?? "";
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+  // Derive base URL from request to avoid localhost fallback in production
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL ??
+    `${req.headers.get("x-forwarded-proto") ?? "https"}://${req.headers.get("host") ?? "localhost:3000"}`;
 
   const makeX402Spec = (amount: string, path: string) => ({
     protocol: "x402",
@@ -145,10 +148,27 @@ export async function GET() {
     onChainProof: {
       agentWallet: "GB77G4BRHXR6ZA7Z3KAPXXDJPD7QCLPZBILBFMQ6NYHJKVEJS47NLBAG",
       explorerBase: "https://stellar.expert/explorer/testnet",
+      horizonBase: "https://horizon-testnet.stellar.org/transactions",
+      stellarLabBase: "https://laboratory.stellar.org/#explorer?resource=transactions&endpoint=single&values=eyJoYXNoIjoiXCJ9",
       sampleTransactions: [
-        { hash: "bcc71244b7fd8a371f948c511d63f17fa39e3473a6bbba4c2eb3fad91869ab87", memo: "x402:search:0.01" },
-        { hash: "c78b1a5d26e39a815dc4a6406e6539fdce971d945de598479852ec6bc026953e", memo: "x402:summarize:0.02" },
-        { hash: "1ed1dea43a78d96861db9e6aec5f30cb649042f61cf994135527647e5ae6a34a", memo: "x402:analyze:0.03" },
+        {
+          hash: "bcc71244b7fd8a371f948c511d63f17fa39e3473a6bbba4c2eb3fad91869ab87",
+          memo: "x402:search:0.01",
+          stellarExpert: "https://stellar.expert/explorer/testnet/tx/bcc71244b7fd8a371f948c511d63f17fa39e3473a6bbba4c2eb3fad91869ab87",
+          horizon: "https://horizon-testnet.stellar.org/transactions/bcc71244b7fd8a371f948c511d63f17fa39e3473a6bbba4c2eb3fad91869ab87",
+        },
+        {
+          hash: "c78b1a5d26e39a815dc4a6406e6539fdce971d945de598479852ec6bc026953e",
+          memo: "x402:summarize:0.02",
+          stellarExpert: "https://stellar.expert/explorer/testnet/tx/c78b1a5d26e39a815dc4a6406e6539fdce971d945de598479852ec6bc026953e",
+          horizon: "https://horizon-testnet.stellar.org/transactions/c78b1a5d26e39a815dc4a6406e6539fdce971d945de598479852ec6bc026953e",
+        },
+        {
+          hash: "1ed1dea43a78d96861db9e6aec5f30cb649042f61cf994135527647e5ae6a34a",
+          memo: "x402:analyze:0.03",
+          stellarExpert: "https://stellar.expert/explorer/testnet/tx/1ed1dea43a78d96861db9e6aec5f30cb649042f61cf994135527647e5ae6a34a",
+          horizon: "https://horizon-testnet.stellar.org/transactions/1ed1dea43a78d96861db9e6aec5f30cb649042f61cf994135527647e5ae6a34a",
+        },
       ],
     },
   }, {
