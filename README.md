@@ -4,6 +4,28 @@
 
 > **Stellar Hacks: Agents 2026** · Built by Mokwa Moffat Ohuru
 
+![Next.js](https://img.shields.io/badge/Next.js-16.2.1-black?style=flat-square&logo=next.js)
+![Stellar](https://img.shields.io/badge/Stellar-Testnet-7B2FBE?style=flat-square&logo=stellar)
+![x402](https://img.shields.io/badge/x402-v2%20Coinbase-0052FF?style=flat-square)
+![Soroban](https://img.shields.io/badge/Soroban-Rust%20Contract-orange?style=flat-square)
+![MPP](https://img.shields.io/badge/MPP-Stripe-635BFF?style=flat-square)
+![OpenRouter](https://img.shields.io/badge/LLM-OpenRouter%20%2F%20GPT--4o--mini-10B981?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-54%20passing-brightgreen?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+
+| Layer | Technology | Version |
+|---|---|---|
+| Blockchain | **Stellar Testnet** — USDC micropayments | — |
+| Payment Protocol | **x402 v2** (Coinbase) — HTTP-native per-request payments | 2.8.0 |
+| Machine Payments | **@stellar/mpp** (Stripe MPP) — session-based flows | experimental |
+| Smart Contract | **Soroban** (Rust) — on-chain spending policy | deployed |
+| Wallet | **Freighter** — browser wallet integration | 6.x |
+| AI Orchestration | **Vercel AI SDK** + GPT-4o-mini via OpenRouter | 6.x |
+| Web Framework | **Next.js** | 16.2.1 |
+| MCP Server | **Model Context Protocol** — Claude/Cursor compatible | — |
+| Database | **Supabase** / in-memory fallback | 2.x |
+| Testing | **Jest** + ts-jest | 54 passing |
+
 ---
 
 ## The Problem
