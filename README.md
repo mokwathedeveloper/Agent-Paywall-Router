@@ -30,15 +30,13 @@
 
 ## The Problem
 
-Every AI agent eventually hits a wall.
-
-Not a technical wall — an economic one.
+Every AI agent eventually hits a wall — not a technical wall, an economic one.
 
 The modern web runs on paywalls: premium APIs, subscription data feeds, per-request intelligence services. When a human hits one, they pull out a credit card. When an AI agent hits one, it stops. It has no wallet, no payment protocol, no way to transact.
 
 This is the **Last Mile problem for AI agents**: they can reason, plan, and execute — but they cannot *pay*.
 
-The result is that agents are permanently locked out of the most valuable data on the internet. They fall back to stale training data, hallucinate facts, or simply fail. Every agent framework in existence today treats payment as an afterthought — a human step that breaks the autonomous loop.
+Agents are permanently locked out of the most valuable data on the internet. They fall back to stale training data, hallucinate facts, or simply fail. Every agent framework today treats payment as an afterthought — a human step that breaks the autonomous loop.
 
 ---
 
@@ -54,61 +52,13 @@ When an agent hits a paywall, this system does not stop. It:
 4. Retries the request with a signed payment receipt
 5. Returns the unlocked data plus a verifiable transaction hash
 
-This is not a simulation. Every payment produces a real Stellar transaction hash verifiable on any Stellar explorer.
-
----
-
-## Real Demo: Agent Researches a Topic and Pays Per Step
-
-Send this prompt:
-
-```
-"Search for Stellar blockchain micropayments and summarize the key points"
-```
-
-What actually happens:
-
-```
-✓  Security Check                     12ms   Prompt verified safe
-✓  Initializing LLM Agent             14ms   Using OpenRouter (openai/gpt-4o-mini)
-✓  Budget available for search        18ms   $0.01 available
-⟳  Requesting search                  19ms   402 — Payment Required
-⟳  Paying $0.01 USDC                  20ms   Signing via @x402/stellar
-✓  search confirmed          $0.01  4821ms   tx: stellar:abc123...
-✓  SpendingPolicy.authorize          6203ms   policy_tx: def456...
-✓  Budget available for summarize    6210ms   $0.02 available
-⟳  Requesting summarize              6211ms   402 — Payment Required
-⟳  Paying $0.02 USDC                 6212ms   Signing via @x402/stellar
-✓  summarize confirmed       $0.02 11432ms   tx: stellar:xyz987...
-✓  Done                             11440ms   All tools executed
-```
-
-Total cost: **$0.03 USDC**. Two real Stellar transactions. One Soroban policy transaction. All verifiable on-chain.
-
-The response includes:
-
-```json
-{
-  "txHash": "stellar:abc123...",
-  "cost": 0.03,
-  "tool": "summarize",
-  "proofs": {
-    "policyTxHash": "def456...",
-    "policyAgent": "G..."
-  },
-  "result": "Stellar enables per-request micropayments..."
-}
-```
-
-Take the `txHash` and verify it at:
-- `https://stellar.expert/explorer/testnet/tx/<hash>`
-- `https://horizon-testnet.stellar.org/transactions/<hash>`
+**This is not a simulation.** Every payment produces a real Stellar transaction hash verifiable on any Stellar explorer.
 
 ---
 
 ## 🔗 On-Chain Proof
 
-Every paid request generates a real, verifiable transaction on Stellar testnet. These are not simulated.
+Every paid request generates a real, verifiable transaction on Stellar testnet.
 
 | Tool | Amount | Transaction | Verified |
 |---|---|---|---|
@@ -119,20 +69,63 @@ Every paid request generates a real, verifiable transaction on Stellar testnet. 
 Verify any transaction independently:
 
 ```bash
-# Stellar Expert
 https://stellar.expert/explorer/testnet/tx/<hash>
-
-# Horizon API (raw JSON)
 https://horizon-testnet.stellar.org/transactions/<hash>
 ```
 
-The Soroban spending policy contract that authorized these payments:
+Soroban spending policy contract:
 
 ```
 CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ
 ```
 
 [View contract on Stellar Expert ↗](https://stellar.expert/explorer/testnet/contract/CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ)
+
+---
+
+## Live Demo
+
+Send this prompt to the agent:
+
+```
+Search for Stellar blockchain news
+```
+
+What actually happens:
+
+```
+✓  Security Check                     12ms   Prompt verified safe
+✓  Initializing LLM Agent             14ms   Using OpenRouter (openai/gpt-4o-mini)
+✓  Service Discovery                  16ms   Found 4 services — cheapest: search at $0.01
+✓  Budget available for search        18ms   $0.01 available
+⟳  Requesting search                  19ms   402 — Payment Required
+⟳  Paying $0.01 USDC                  20ms   Signing via @x402/stellar
+✓  search confirmed          $0.01  4821ms   tx: stellar:71bd4c7b...
+✓  SpendingPolicy.authorize          6203ms   policy_tx: dc170eee...
+✓  Done                              6210ms   All tools executed
+```
+
+Total cost: **$0.01 USDC**. One real Stellar transaction. One Soroban policy transaction. Both verifiable on-chain.
+
+The response includes:
+
+```json
+{
+  "txHash": "stellar:71bd4c7bbb0a926c8b9165d8f47ad8944e1761759dd8839e9dab5562fc85d79a",
+  "cost": 0.01,
+  "tool": "search",
+  "proofs": {
+    "policyTxHash": "dc170eee68e5dcfef91ac0b739f49cc717ace0a89dc1722a1be29b54e7b...",
+    "policyAgent": "G..."
+  },
+  "marketplace": {
+    "servicesDiscovered": 4,
+    "cheapestService": "search",
+    "cheapestPriceUsd": 0.01,
+    "txExplorerLink": "https://stellar.expert/explorer/testnet/tx/71bd4c7b..."
+  }
+}
+```
 
 ---
 
@@ -148,7 +141,7 @@ CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ
 ┌─────────────────────────────────────────────────────────────┐
 │                   LLM Orchestration Engine                  │
 │  GPT-4o-mini via OpenRouter/OpenAI · Vercel AI SDK         │
-│  Security scan · Budget gate · Tool selection · maxSteps:5 │
+│  Security scan · Budget gate · Service discovery · maxSteps│
 └──────────────────────────┬──────────────────────────────────┘
                            │ tool.execute()
                            ▼
@@ -175,10 +168,8 @@ CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Four layers, each with a distinct responsibility:
-
 - **Agent Layer** — any client that can send an HTTP request: browser, curl, Claude via MCP, or another autonomous agent via `ExternalAgentClient`
-- **LLM Orchestration Engine** — GPT-4o-mini decides which tools to call, in what order, and with what inputs. It operates under a strict economic system prompt: minimize cost, never duplicate calls, never fabricate data
+- **LLM Orchestration Engine** — GPT-4o-mini fetches the live service registry, selects the cheapest valid tool, and executes with a strict economic system prompt
 - **Payment Router** — intercepts tool calls, handles the 402 challenge, signs USDC transactions on Stellar, and enforces the Soroban spending policy before every payment
 - **Tool Servers** — x402-protected HTTP endpoints that return real data only after payment is verified and settled
 
@@ -186,7 +177,7 @@ Four layers, each with a distinct responsibility:
 
 ## How It Works
 
-### Step-by-step: request → 402 → payment → retry → success
+### Request → 402 → Payment → Retry → Success
 
 ```
 Step 1  Agent calls GET /api/tools/search?q=stellar
@@ -221,18 +212,11 @@ Step 5  Agent retries GET /api/tools/search?q=stellar
         Server verifies via x402.org/facilitator
         Settlement confirmed → tool executes
 
-Step 6  Server returns 200 OK:
-        {
-          "results": [...],
-          "proofs": {
-            "paymentTxHash": "stellar:abc123...",
-            "policyTxHash": "def456..."
-          }
-        }
+Step 6  Server returns 200 OK + data + proofs
         PAYMENT-RESPONSE header contains settlement proof
 ```
 
-### The Soroban Spending Policy
+### Soroban Spending Policy
 
 The Rust contract deployed on Stellar testnet enforces per-agent spending limits on-chain:
 
@@ -256,28 +240,26 @@ If the agent tries to exceed $5.00, the contract panics. The payment is rejected
 
 ---
 
-## Running the Project
+## Quick Start
 
 ### Prerequisites
 
 - Node.js 20+
 - Two Stellar testnet wallets with USDC trustlines
-- A free LLM key from [openrouter.ai](https://openrouter.ai)
+- A free LLM key from [openrouter.ai](https://openrouter.ai) — no credit card required
 
 ### 1. Get a free LLM key
 
-Go to [https://openrouter.ai](https://openrouter.ai) → sign up with Google/GitHub → create a key.
-No credit card required. Free credits included.
+Go to [https://openrouter.ai](https://openrouter.ai) → sign up with Google or GitHub → create a key.
 
-### 2. Get Stellar testnet wallets with USDC
+### 2. Fund Stellar testnet wallets
 
 ```bash
-# Fund both wallets with testnet XLM
 curl "https://friendbot.stellar.org?addr=<AGENT_PUBLIC_KEY>"
 curl "https://friendbot.stellar.org?addr=<RECEIVER_PUBLIC_KEY>"
 ```
 
-Add USDC trustline to both via [Stellar Lab](https://laboratory.stellar.org).
+Add a USDC trustline to both wallets via [Stellar Lab](https://laboratory.stellar.org).
 USDC issuer on testnet: `GBBD67V63LTZ6ORUC6KXW7ZJJEIKB3766SQRR2NJZSC6ZBCS2MVAUIB9`
 
 ### 3. Clone and install
@@ -297,60 +279,32 @@ cp .env.example apps/web/.env.local
 Edit `apps/web/.env.local`:
 
 ```env
-# Agent wallet — pays for tools
-STELLAR_PRIVATE_KEY=S...
-
-# Service wallet — receives payments
-STELLAR_RECEIVER_ADDRESS=G...
-
-# Free LLM key from openrouter.ai
-OPENROUTER_API_KEY=sk-or-...
-
-# Base URL
+STELLAR_PRIVATE_KEY=S...           # Agent wallet — pays for tools
+STELLAR_RECEIVER_ADDRESS=G...      # Service wallet — receives payments
+OPENROUTER_API_KEY=sk-or-...       # Free LLM key from openrouter.ai
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
-
-# x402 facilitator
 FACILITATOR_URL=https://x402.org/facilitator
 ```
 
-### 5. Start the server
+### 5. Start and run
 
 ```bash
-cd apps/web
-npm run dev
+cd apps/web && npm run dev
 ```
 
-### 6. Run the demo
-
-**Option A — CLI (recommended)**
+Then open [http://localhost:3000/workspace](http://localhost:3000/workspace) or run the CLI demo:
 
 ```bash
-# In a second terminal, from repo root:
+# From repo root — in a second terminal
 npm run demo
 ```
 
-**Option B — API endpoint**
+**Verify on-chain** — take the `txHash` from any response:
 
 ```bash
-curl -s "http://localhost:3000/api/demo/run" | jq .
+https://stellar.expert/explorer/testnet/tx/<hash>
+https://horizon-testnet.stellar.org/transactions/<hash>
 ```
-
-**Option C — Browser UI**
-
-Open [http://localhost:3000/workspace](http://localhost:3000/workspace)
-
-**Option D — curl direct**
-
-```bash
-curl -s -X POST "http://localhost:3000/api/agent" \
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"Search for Stellar blockchain and summarize the key points"}' \
-  | jq '{txHash, cost, tool}'
-```
-
-**Verify on-chain** — take the `txHash` from the response:
-- `https://stellar.expert/explorer/testnet/tx/<hash>`
-- `https://horizon-testnet.stellar.org/transactions/<hash>`
 
 ---
 
@@ -360,6 +314,7 @@ curl -s -X POST "http://localhost:3000/api/agent" \
 |---|---|---|---|
 | `/api/demo/run` | GET | End-to-end demo with payment proof | varies |
 | `/api/agent` | POST | LLM orchestration — multi-step tool chaining | varies |
+| `/api/services` | GET | Agent-optimised service registry (sorted by price) | free |
 | `/api/tools/search` | GET | x402-protected web search | $0.01 USDC |
 | `/api/tools/summarize` | POST | x402-protected LLM summarization | $0.02 USDC |
 | `/api/tools/analyze` | POST | x402-protected sentiment analysis | $0.03 USDC |
@@ -373,60 +328,38 @@ curl -s -X POST "http://localhost:3000/api/agent" \
 
 ---
 
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Web Framework | Next.js 16.2.1 |
-| AI Orchestration | Vercel AI SDK 6.x |
-| LLM | OpenRouter (free) or OpenAI — GPT-4o-mini |
-| Payment Protocol | x402 v2 (Coinbase) |
-| Machine Payments | @stellar/mpp (Stripe MPP) |
-| Blockchain | Stellar Testnet |
-| Smart Contract | Soroban (Rust) |
-| Frontend State | Zustand 5.x |
-| Animations | Framer Motion 12.x |
-| Database | Supabase / in-memory fallback |
-| Testing | Jest + ts-jest — 54 passing |
-
----
-
 ## Why Stellar
 
 **Micropayments are only viable if the fee is smaller than the payment.**
 
-On Ethereum, a $0.01 payment costs $2–$15 in gas. That is not a micropayment — it is a tax that makes per-request pricing economically impossible.
+On Ethereum, a $0.01 payment costs $2–$15 in gas. That is not a micropayment — it is a tax.
 
 On Stellar:
 
-- **Transaction fee: ~$0.00001** — 1000x cheaper than the cheapest tool in this system. A $0.01 search query with a $0.00001 fee means 99.99% of the payment reaches the service provider.
-- **Settlement: 3–5 seconds** — fast enough for a synchronous HTTP request cycle. The agent does not wait.
-- **USDC native** — no wrapping, no bridges, no slippage. The asset used in this system is the same USDC that exists on every major exchange.
-- **Soroban smart contracts** — programmable spending limits enforced on-chain, not in a database that can be reset. The contract panics if the limit is exceeded. There is no workaround.
-- **x402 protocol** — HTTP-native payment standard designed specifically for machine-to-machine transactions. The 402 status code has existed since 1996. Stellar makes it finally usable.
-
-Stellar is the only blockchain where per-request micropayments are economically rational at the $0.01 scale.
+- **Fee: ~$0.00001** — 1000x cheaper than the cheapest tool in this system. 99.99% of every payment reaches the service provider.
+- **Settlement: 3–5 seconds** — fast enough for a synchronous HTTP request cycle.
+- **USDC native** — no wrapping, no bridges, no slippage.
+- **Soroban** — programmable spending limits enforced on-chain, not in a database that can be reset.
+- **x402** — HTTP-native payment standard. The 402 status code has existed since 1996. Stellar makes it finally usable.
 
 ---
 
 ## Soroban Spending Policy Contract
-
-Deployed on Stellar testnet. Enforces per-agent spending limits on-chain.
 
 | | |
 |---|---|
 | Contract ID | `CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ` |
 | Network | Stellar Testnet |
 | Limit | $5.00 per agent (50,000,000 stroops) |
-| Explorer | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ) |
+| Explorer | [View on Stellar Expert ↗](https://stellar.expert/explorer/testnet/contract/CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ) |
 
-The contract tracks cumulative spend per agent address in persistent storage. It emits an on-chain event for every authorized payment. It cannot be bypassed — the payment flow calls `authorize()` before settlement, and if the contract panics, the tool server never receives the payment and never returns data.
+The contract tracks cumulative spend per agent address in persistent storage. It emits an on-chain event for every authorized payment. It cannot be bypassed — if the contract panics, the tool server never receives the payment and never returns data.
 
 ---
 
 ## MCP Support — Claude and Cursor Compatible
 
-Any MCP-enabled AI system can discover and pay for tools without any custom integration:
+Any MCP-enabled AI system can discover and pay for tools without custom integration:
 
 ```bash
 curl http://localhost:3000/api/mcp/tools
@@ -450,15 +383,13 @@ curl http://localhost:3000/api/mcp/tools
 
 ## Future Potential
 
-This system demonstrates the foundation of a machine economy. The next steps are already visible in the architecture:
+**Multi-provider marketplace** — any service implementing x402 on Stellar can register in `/api/catalog`. Agents choose providers by price, latency, and reputation — real market competition between data services.
 
-**Multi-provider tool marketplace** — the `/api/catalog` endpoint is designed to be extended. Any service implementing x402 on Stellar can register itself. Agents would then choose providers based on price, latency, and reputation — creating real market competition between data services.
+**Agent-to-agent commerce** — the `ExternalAgentClient` shows agents can be both buyers and sellers. An agent that earns USDC by providing a service can spend that USDC to consume other services. The economic loop closes without human intervention.
 
-**Agent-to-agent commerce** — the `ExternalAgentClient` (`lib/agents/external-agent.ts`) shows that agents can be both buyers and sellers. An agent that earns USDC by providing a service can spend that USDC to consume other services. The economic loop closes without human intervention.
+**Programmable spending policies** — the Soroban contract supports time-based limits, per-tool limits, multi-signature authorization, and DAO-governed policies. Any rule expressible in Rust can be enforced on-chain.
 
-**Programmable spending policies** — the Soroban contract currently enforces a flat $5.00 limit. The same architecture supports time-based limits, per-tool limits, multi-signature authorization, and DAO-governed spending policies. Any rule that can be expressed in Rust can be enforced on-chain.
-
-**Cross-agent trust** — because every transaction is on-chain, agents can verify each other's payment history before accepting requests. A reputation system built on Stellar transaction history requires no central authority.
+**Cross-agent trust** — every transaction is on-chain. Agents can verify each other's payment history before accepting requests. A reputation system built on Stellar transaction history requires no central authority.
 
 The infrastructure for a machine economy exists. This project proves it works.
 
@@ -471,6 +402,7 @@ apps/web/
 ├── app/api/
 │   ├── agent/          # LLM orchestration + x402 payment execution
 │   ├── demo/           # End-to-end demo entrypoint (GET /api/demo/run)
+│   ├── services/       # Agent-optimised service registry (GET /api/services)
 │   ├── catalog/        # Machine-readable tool discovery
 │   ├── tools/          # x402-protected endpoints (search, summarize, analyze, mpp)
 │   ├── mcp/            # Model Context Protocol server
@@ -479,7 +411,7 @@ apps/web/
 │   ├── health/         # Health check + live Soroban verification
 │   └── a2a/            # Agent-to-Agent commerce
 ├── lib/
-│   ├── llm.ts          # Shared LLM resolver (OpenRouter / OpenAI)
+│   ├── llm.ts              # Shared LLM resolver (OpenRouter / OpenAI)
 │   ├── paywall/
 │   │   ├── x402.ts         # x402 server — verify + settle
 │   │   └── paid-x402-tool.ts  # Shared verify → policy → settle → proof
@@ -521,11 +453,8 @@ scripts/
 ```bash
 cd apps/web
 
-# Unit tests (54 passing — no server required)
-npm test
-
-# Type check
-npx tsc --noEmit
+npm test           # 54 unit tests — no server required
+npx tsc --noEmit   # TypeScript check
 ```
 
 ---
