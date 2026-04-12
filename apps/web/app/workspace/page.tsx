@@ -17,6 +17,7 @@ import { BudgetDrawer } from "./components/BudgetDrawer";
 import { BazaarView } from "./components/BazaarView";
 import { PaymentsView } from "./components/PaymentsView";
 import { AgentReasoningPanel } from "./components/AgentReasoningPanel";
+import { AgentPanel } from "./components/AgentPanel";
 
 const WalletConnect = dynamic(() => import("./WalletConnect"), { ssr: false, loading: () => null });
 const WalletConnectSidebar = dynamic(() => import("./WalletConnect"), { ssr: false, loading: () => null });
@@ -209,6 +210,16 @@ export default function WorkspacePage() {
               </div>
             </motion.div>
           )}
+          {activeView === "demo" && (
+            <motion.div key="demo" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ flex: 1, overflowY: "auto", padding: "var(--s6) var(--s8)" }}>
+              <div style={{ marginBottom: "var(--s6)" }}>
+                <h2 className="h2" style={{ marginBottom: "var(--s2)" }}>Live Demo</h2>
+                <p className="body">Agent discovers services, selects cheapest, pays autonomously, returns verifiable proof.</p>
+              </div>
+              <AgentPanel sessionId={session?.id ?? null} />
+            </motion.div>
+          )}
           {activeView === "bazaar" && (
             <motion.div key="bazaar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, minHeight: 0 }}>
               <BazaarView catalog={catalog} />
@@ -246,6 +257,7 @@ function Sidebar({
 }) {
   const navItems = [
     { id: "workspace", icon: LayoutDashboard, label: "Workspace" },
+    { id: "demo", icon: Zap, label: "Live Demo" },
     { id: "bazaar", icon: Search, label: "Bazaar" },
     { id: "payments", icon: CreditCard, label: "Payments" },
     { id: "settings", icon: Settings, label: "Settings" },
@@ -324,6 +336,7 @@ function TopBar({
 }) {
   const titles: Record<string, string> = {
     workspace: "Agent Execution",
+    demo: "Live Demo",
     bazaar: "Tool Bazaar",
     payments: "Payment Ledger",
     settings: "Settings",
