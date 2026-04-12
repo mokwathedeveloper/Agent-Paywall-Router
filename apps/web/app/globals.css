@@ -1,9 +1,9 @@
 /* ================================================================
    Agent Paywall Router — Design System v2
-   Organic, editorial, handcrafted dark UI
    ================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Google Fonts now loaded via next/font in layout.tsx — no @import needed */
+/* JetBrains Mono fallback to system monospace if not loaded */
 
 /* ─── Design Tokens ─── */
 :root {

@@ -14,11 +14,13 @@ export default function LandingPage() {
   return (
     <div style={{ background: "var(--bg-deep)", minHeight: "100vh" }}>
       <Nav />
-      <Hero />
-      <BentoFeatures />
-      <Pricing />
-      <Proof />
-      <BottomCTA />
+      <main id="main-content">
+        <Hero />
+        <BentoFeatures />
+        <Pricing />
+        <Proof />
+        <BottomCTA />
+      </main>
       <Footer />
     </div>
   );
@@ -44,8 +46,8 @@ function Nav() {
           <span style={{ fontWeight: 700, fontSize: "0.9375rem", letterSpacing: "-0.01em" }}>AgentPay</span>
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--s3)" }}>
-          <Link href="https://github.com/mokwathedeveloper/Agent-Paywall-Router" target="_blank" className="btn btn-ghost">
-            <span className="hide-mobile">GitHub</span> <ExternalLink size={13} />
+          <Link href="https://github.com/mokwathedeveloper/Agent-Paywall-Router" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" aria-label="View source code on GitHub">
+            <span className="hide-mobile">GitHub</span> <ExternalLink size={13} aria-hidden="true" />
           </Link>
           <Link href="/workspace" className="btn btn-primary" style={{ fontSize: "0.8125rem", padding: "8px 18px" }}>
             Open App <ArrowRight size={13} />
@@ -81,7 +83,7 @@ function Hero() {
           <Link href="/workspace" className="btn btn-primary btn-lg">
             Try the demo <ArrowRight size={15} />
           </Link>
-          <Link href="https://github.com/mokwathedeveloper/Agent-Paywall-Router" target="_blank" className="btn btn-secondary btn-lg">
+          <Link href="https://github.com/mokwathedeveloper/Agent-Paywall-Router" target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-lg">
             Source code
           </Link>
         </motion.div>
