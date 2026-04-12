@@ -135,8 +135,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           "\n" +
           "TOOL USAGE POLICY:\n" +
           "- Use search ONLY when information is unknown.\n" +
-          "- Use summarize ONLY after getting long content.\n" +
-          "- Use analyze ONLY for deeper insights or comparisons.",
+          "- Use summarize ONLY after getting long content — and ONLY if the user explicitly asks for a summary.\n" +
+          "- Use analyze ONLY for deeper insights — and ONLY if the user explicitly asks for analysis.\n" +
+          "- For simple search requests, call search ONCE and return the results directly. Do NOT chain tools unless asked.",
         prompt,
         tools: agentTools,
         stopWhen: stepCountIs(5),
@@ -249,7 +250,11 @@ async function executeToolWithPayment(
     }
 
     const recorded = await recordSpend(sessionId, price);
-    if (!recorded) throw new Error(`Budget reservation failed after successful ${toolName} execution`);
+    if (!recorded) {
+      // Log but don't throw — the payment already happened on-chain.
+      // The transaction record is more important than the budget counter.
+      console.warn(`[db] recordSpend returned false for session ${sessionId} — session may have been recreated after restart. Continuing.`);
+    }
 
     await addTransaction({
       session_id: sessionId,

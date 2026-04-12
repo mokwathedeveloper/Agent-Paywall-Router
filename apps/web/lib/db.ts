@@ -53,7 +53,25 @@ export async function getSession(id: string): Promise<DBSession | null> {
       console.error("[db] Supabase getSession error:", error.message);
     }
     if (data) return data as DBSession;
-    return null; // not in Supabase — don't fall through to stale memory
+    return null;
+  }
+  // In-memory: if session missing (server restarted), recover it if it looks like a real session ID
+  if (!memSessions.has(id)) {
+    // Only recover IDs that match our generated format (sess_xxxxxxxx)
+    // Unknown/garbage IDs return null as expected
+    if (/^sess_[a-z0-9]{8}$/.test(id)) {
+      const recovered: DBSession = {
+        id,
+        spending_limit: DEFAULT_SPENDING_LIMIT,
+        used_amount: 0,
+        expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
+        created_at: new Date().toISOString(),
+      };
+      memSessions.set(id, recovered);
+      console.log(`[db] Session ${id} recovered in memory after restart`);
+    } else {
+      return null;
+    }
   }
   return memSessions.get(id) || null;
 }
@@ -127,7 +145,19 @@ export async function recordSpend(sessionId: string, amount: number): Promise<bo
   }
 
   return await withSessionLock(sessionId, async () => {
-    const mem = memSessions.get(sessionId);
+    let mem = memSessions.get(sessionId);
+    // Session missing from memory (server restarted) — recreate it so spend is tracked
+    if (!mem && /^sess_[a-z0-9]{8}$/.test(sessionId)) {
+      mem = {
+        id: sessionId,
+        spending_limit: DEFAULT_SPENDING_LIMIT,
+        used_amount: 0,
+        expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
+        created_at: new Date().toISOString(),
+      };
+      memSessions.set(sessionId, mem);
+      console.log(`[db] Session ${sessionId} recreated in memory after restart`);
+    }
     if (!mem) return false;
     if (new Date(mem.expires_at) < now) return false;
     if (mem.used_amount + amount > mem.spending_limit) return false;
