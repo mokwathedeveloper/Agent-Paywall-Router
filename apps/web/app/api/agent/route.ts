@@ -123,8 +123,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     addStep("Initializing LLM Agent", "success", null, 0, `Using ${resolved.provider}`);
 
-    // Fetch live service registry — agent uses real prices for cost-aware decisions
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+    // Resolve base URL — works on Vercel (production + preview) and localhost
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL ??
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null) ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+      "http://localhost:3000";
     const services = await fetchServices(baseUrl);
     addStep(
       "Service Discovery",
