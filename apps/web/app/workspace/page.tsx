@@ -135,7 +135,7 @@ export default function WorkspacePage() {
           await new Promise((r) => setTimeout(r, 400));
           setSteps(data.steps.slice(0, i + 1));
         }
-        setLastResult({ text: data.result, toolOutputs: data.toolOutputs ?? [] });
+        setLastResult({ text: data.result ?? "", toolOutputs: data.toolOutputs ?? [] });
         if (data.summary) setSummary(data.summary);
         if (data.marketplace) setMarketplace(data.marketplace);
         if (data.txHash) setTxHash(data.txHash);

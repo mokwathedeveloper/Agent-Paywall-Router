@@ -135,7 +135,7 @@ export function Timeline({ steps }: Props) {
         >
           <CheckCircle2 size={18} color="var(--emerald)" style={{ flexShrink: 0 }} />
           <span style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--emerald)" }}>
-            Payment complete — result below
+            Payment successful — result below
           </span>
         </motion.div>
       )}

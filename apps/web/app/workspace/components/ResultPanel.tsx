@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Copy, ExternalLink, Search, FileText, BarChart3 } from "lucide-react";
+import { CheckCircle2, Copy, ExternalLink, Search, FileText, BarChart3, AlertCircle } from "lucide-react";
 
 interface SearchResult {
   title: string;
@@ -11,25 +11,21 @@ interface SearchResult {
 }
 
 interface ToolData {
-  // search
   results?: SearchResult[];
   query?: string;
   totalResults?: number;
   searchTime?: number;
-  // summarize
   summary?: string;
   keyPoints?: string[];
   originalLength?: number;
   summaryLength?: number;
   confidence?: number;
-  // analyze
   sentiment?: "positive" | "neutral" | "negative";
   themes?: string[];
   entities?: string[];
   topic?: string;
   readabilityScore?: number;
   wordCount?: number;
-  // proofs (strip from display)
   proofs?: unknown;
   tool?: string;
   cost?: unknown;
@@ -141,10 +137,10 @@ function AnalyzeOutput({ data }: { data: ToolData }) {
             {data.sentiment} sentiment
           </span>
         )}
-        {Array.isArray(data.themes) && data.themes.map((t) => (
+        {Array.isArray(data.themes) && data.themes.map(t => (
           <span key={t} className="badge badge-indigo">{t}</span>
         ))}
-        {Array.isArray(data.entities) && data.entities.map((e) => (
+        {Array.isArray(data.entities) && data.entities.map(e => (
           <span key={e} className="badge badge-neutral">{e}</span>
         ))}
       </div>
@@ -186,15 +182,23 @@ function ToolSection({ output }: { output: ToolOutput }) {
 export function ResultPanel({ result }: { result: unknown }) {
   const [copied, setCopied] = useState(false);
 
-  // Normalise: accept both the new { text, toolOutputs } shape and legacy plain string
-  const payload: ResultPayload = typeof result === "object" && result !== null && "text" in result
-    ? result as ResultPayload
-    : { text: String(result ?? ""), toolOutputs: [] };
+  // Normalise into { text, toolOutputs }
+  const payload: ResultPayload =
+    typeof result === "object" && result !== null && "text" in result
+      ? (result as ResultPayload)
+      : { text: String(result ?? ""), toolOutputs: [] };
 
   const hasToolOutputs = Array.isArray(payload.toolOutputs) && payload.toolOutputs.length > 0;
+  const hasText = typeof payload.text === "string" && payload.text.trim().length > 0;
+  const hasContent = hasToolOutputs || hasText;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(payload.text);
+    const content = hasText
+      ? payload.text
+      : hasToolOutputs
+      ? JSON.stringify(payload.toolOutputs, null, 2)
+      : "";
+    if (content) navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -206,33 +210,50 @@ export function ResultPanel({ result }: { result: unknown }) {
       transition={{ duration: 0.4, ease }}
       style={{
         background: "var(--bg-surface)",
-        border: "1px solid var(--border-glow)",
+        border: `1px solid ${hasContent ? "var(--border-glow)" : "var(--border-dim)"}`,
         borderRadius: "var(--r-xl)",
         overflow: "hidden",
       }}
     >
-      {/* Header */}
+      {/* Header — message changes based on whether result exists */}
       <div style={{
         padding: "var(--s4) var(--s5)", borderBottom: "1px solid var(--border-dim)",
         background: "var(--bg-card)", display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
-          <CheckCircle2 size={14} color="var(--emerald)" />
-          <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--emerald)" }}>Insights Unlocked</span>
+          {hasContent
+            ? <CheckCircle2 size={14} color="var(--emerald)" />
+            : <AlertCircle size={14} color="var(--amber)" />
+          }
+          <span style={{
+            fontSize: "0.8125rem", fontWeight: 600,
+            color: hasContent ? "var(--emerald)" : "var(--amber)",
+          }}>
+            {hasContent
+              ? "Payment successful. Result:"
+              : "Payment successful. No result was returned."
+            }
+          </span>
         </div>
-        <button onClick={handleCopy} className="btn btn-ghost" style={{ fontSize: "0.75rem", padding: "4px var(--s3)", gap: "var(--s1)" }}>
-          <Copy size={12} />{copied ? "Copied" : "Copy"}
-        </button>
+        {hasContent && (
+          <button
+            onClick={handleCopy}
+            className="btn btn-ghost"
+            style={{ fontSize: "0.75rem", padding: "4px var(--s3)", gap: "var(--s1)" }}
+          >
+            <Copy size={12} />{copied ? "Copied" : "Copy"}
+          </button>
+        )}
       </div>
 
       <div style={{ padding: "var(--s5)" }}>
-        {/* Structured tool outputs */}
+        {/* Case 1: has structured tool outputs */}
         {hasToolOutputs && payload.toolOutputs.map((o, i) => (
           <ToolSection key={`${o.tool}-${i}`} output={o} />
         ))}
 
-        {/* LLM text answer */}
-        {payload.text && (
+        {/* Case 2: has LLM text */}
+        {hasText && (
           <div style={hasToolOutputs ? {
             marginTop: "var(--s2)", paddingTop: "var(--s4)",
             borderTop: "1px solid var(--border-dim)",
@@ -243,6 +264,16 @@ export function ResultPanel({ result }: { result: unknown }) {
             <p className="body" style={{ margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.7 }}>
               {payload.text}
             </p>
+          </div>
+        )}
+
+        {/* Case 3: no content at all */}
+        {!hasContent && (
+          <div style={{
+            padding: "var(--s5)", textAlign: "center",
+            color: "var(--text-muted)", fontSize: "0.875rem",
+          }}>
+            Request completed successfully, but no data was returned.
           </div>
         )}
       </div>
