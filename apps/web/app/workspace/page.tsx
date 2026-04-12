@@ -195,6 +195,8 @@ export default function WorkspacePage() {
               }}>
                 {steps.length === 0 && !isExecuting ? (
                   <EmptyState />
+                ) : steps.length === 0 && isExecuting ? (
+                  <ExecutingState />
                 ) : (
                   <>
                     <AgentReasoningPanel
@@ -357,6 +359,99 @@ function TopBar({
       <div className="badge badge-emerald">
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--emerald)" }} />
         Stellar Testnet
+      </div>
+    </div>
+  );
+}
+
+/* ─── Executing State ─── */
+function ExecutingState() {
+  const [elapsed, setElapsed] = useState(0);
+  const [dot, setDot] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed(e => e + 1), 1000);
+    const dots = setInterval(() => setDot(d => (d + 1) % 4), 500);
+    return () => { clearInterval(timer); clearInterval(dots); };
+  }, []);
+
+  const stages = [
+    { t: 0,  label: "Security scan…" },
+    { t: 2,  label: "Initializing LLM agent…" },
+    { t: 4,  label: "Fetching service marketplace…" },
+    { t: 6,  label: "Agent selecting cheapest service…" },
+    { t: 8,  label: "Requesting tool — awaiting 402…" },
+    { t: 12, label: "Signing USDC payment on Stellar…" },
+    { t: 18, label: "Waiting for Stellar settlement…" },
+    { t: 24, label: "Verifying Soroban spending policy…" },
+    { t: 30, label: "Retrying request with payment receipt…" },
+    { t: 40, label: "Processing response…" },
+  ];
+
+  const currentStage = [...stages].reverse().find(s => elapsed >= s.t) ?? stages[0];
+  const dots = ".".repeat(dot);
+
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", height: "100%", gap: "var(--s6)",
+      paddingBottom: "var(--s16)",
+    }}>
+      {/* Animated ring */}
+      <div style={{ position: "relative", width: 80, height: 80 }}>
+        <svg width="80" height="80" viewBox="0 0 80 80" style={{ transform: "rotate(-90deg)" }}>
+          <circle cx="40" cy="40" r="34" fill="none" stroke="var(--bg-hover)" strokeWidth="6" />
+          <circle
+            cx="40" cy="40" r="34" fill="none"
+            stroke="var(--emerald)" strokeWidth="6"
+            strokeDasharray={`${Math.min(elapsed * 4, 213)} 213`}
+            strokeLinecap="round"
+            style={{ transition: "stroke-dasharray 1s ease" }}
+          />
+        </svg>
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Zap size={24} color="var(--emerald)" strokeWidth={1.5} />
+        </div>
+      </div>
+
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontWeight: 600, fontSize: "1rem", marginBottom: "var(--s2)" }}>
+          {currentStage.label}{dots}
+        </div>
+        <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+          {elapsed}s elapsed · Stellar payments take 3–5s each
+        </div>
+      </div>
+
+      {/* Payment flow mini-steps */}
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)", flexWrap: "wrap", justifyContent: "center" }}>
+        {[
+          { label: "Security",  done: elapsed >= 2 },
+          { label: "LLM Init",  done: elapsed >= 4 },
+          { label: "Discovery", done: elapsed >= 6 },
+          { label: "402",       done: elapsed >= 10 },
+          { label: "Payment",   done: elapsed >= 18 },
+          { label: "Result",    done: false },
+        ].map((s, i, arr) => (
+          <div key={s.label} style={{ display: "flex", alignItems: "center", gap: "var(--s1)" }}>
+            <div style={{
+              padding: "3px 10px", borderRadius: "var(--r-full)",
+              fontSize: "0.625rem", fontWeight: 600,
+              background: s.done ? "var(--emerald-dim)" : "var(--bg-hover)",
+              color: s.done ? "var(--emerald)" : "var(--text-dim)",
+              border: `1px solid ${s.done ? "rgba(16,185,129,0.3)" : "transparent"}`,
+              transition: "all 0.5s ease",
+            }}>
+              {s.label}
+            </div>
+            {i < arr.length - 1 && (
+              <div style={{ width: 12, height: 1, background: s.done ? "var(--emerald)" : "var(--border-dim)", transition: "background 0.5s ease" }} />
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
