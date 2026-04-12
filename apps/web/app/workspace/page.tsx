@@ -53,14 +53,6 @@ export default function WorkspacePage() {
 
   useEffect(() => { setMounted(true); }, []);
 
-  if (!mounted) {
-    return (
-      <div className="workspace-layout" style={{ alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>Loading…</div>
-      </div>
-    );
-  }
-
   // Initialize session — reuse persisted session or create new one
   useEffect(() => {
     if (session) return;
@@ -163,102 +155,106 @@ export default function WorkspacePage() {
 
   return (
     <div className="workspace-layout">
-      {sidebarOpen && (
-        <div
-          onClick={() => setSidebarOpen(false)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 40 }}
-        />
-      )}
+      {!mounted ? null : (
+        <>
+          {sidebarOpen && (
+            <div
+              onClick={() => setSidebarOpen(false)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 40 }}
+            />
+          )}
 
-      <Sidebar
-        activeView={activeView}
-        setActiveView={setActiveView}
-        sessionId={session?.id ?? null}
-        sidebarOpen={sidebarOpen}
-      />
+          <Sidebar
+            activeView={activeView}
+            setActiveView={setActiveView}
+            sessionId={session?.id ?? null}
+            sidebarOpen={sidebarOpen}
+          />
 
-      <main className="workspace-main">
-        <TopBar
-          activeView={activeView}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((o) => !o)}
-        />
+          <main className="workspace-main">
+            <TopBar
+              activeView={activeView}
+              sidebarOpen={sidebarOpen}
+              onToggleSidebar={() => setSidebarOpen((o) => !o)}
+            />
 
-        {initError && (
-          <div style={{
-            margin: "var(--s4) var(--s6)", padding: "var(--s3) var(--s5)",
-            background: "var(--rose-dim)", border: "1px solid rgba(244,63,94,0.3)",
-            borderRadius: "var(--r-lg)", fontSize: "0.875rem", color: "var(--rose)",
-          }}>
-            Session init failed: {initError}. Using in-memory fallback.
-          </div>
-        )}
-
-        <AnimatePresence mode="wait">
-          {activeView === "workspace" && (
-            <motion.div key="workspace" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-              <div style={{ padding: "var(--s6)", borderBottom: "1px solid var(--border-dim)", flexShrink: 0 }}>
-                <PromptBox
-                  onSubmit={handleExecute}
-                  isExecuting={isExecuting}
-                  sessionReady={!!session}
-                />
-              </div>
-              <div className="timeline-area" ref={(el) => {
-                if (el && lastResult) el.scrollTop = el.scrollHeight;
+            {initError && (
+              <div style={{
+                margin: "var(--s4) var(--s6)", padding: "var(--s3) var(--s5)",
+                background: "var(--rose-dim)", border: "1px solid rgba(244,63,94,0.3)",
+                borderRadius: "var(--r-lg)", fontSize: "0.875rem", color: "var(--rose)",
               }}>
-                {steps.length === 0 && !isExecuting ? (
-                  <EmptyState onSuggestion={handleExecute} />
-                ) : steps.length === 0 && isExecuting ? (
-                  <ExecutingState />
-                ) : (
-                  <>
-                    <AgentReasoningPanel
-                      marketplace={marketplace}
-                      txHash={txHash}
-                      isExecuting={isExecuting}
-                      steps={steps}
-                    />
-                    <Timeline steps={steps} />
-                  </>
-                )}
-                {lastResult !== null && !isExecuting && <ResultPanel result={lastResult} />}
+                Session init failed: {initError}. Using in-memory fallback.
               </div>
-            </motion.div>
-          )}
-          {activeView === "demo" && (
-            <motion.div key="demo" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ flex: 1, overflowY: "auto", padding: "var(--s6) var(--s8)" }}>
-              <div style={{ marginBottom: "var(--s6)" }}>
-                <h2 className="h2" style={{ marginBottom: "var(--s2)" }}>Live Demo</h2>
-                <p className="body">Agent discovers services, selects cheapest, pays autonomously, returns verifiable proof.</p>
-              </div>
-              <AgentPanel sessionId={session?.id ?? null} />
-            </motion.div>
-          )}
-          {activeView === "bazaar" && (
-            <motion.div key="bazaar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, minHeight: 0 }}>
-              <BazaarView catalog={catalog} />
-            </motion.div>
-          )}
-          {activeView === "payments" && (
-            <motion.div key="payments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, minHeight: 0 }}>
-              <PaymentsView />
-            </motion.div>
-          )}
-          {activeView === "settings" && (
-            <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, minHeight: 0 }}>
-              <SettingsView session={session} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
+            )}
 
-      <aside className="workspace-drawer" style={{ gap: "var(--s5)" }}>
-        <BudgetDrawer summary={summary} />
-        <ToolsPanel catalog={catalog} />
-      </aside>
+            <AnimatePresence mode="wait">
+              {activeView === "workspace" && (
+                <motion.div key="workspace" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+                  <div style={{ padding: "var(--s6)", borderBottom: "1px solid var(--border-dim)", flexShrink: 0 }}>
+                    <PromptBox
+                      onSubmit={handleExecute}
+                      isExecuting={isExecuting}
+                      sessionReady={!!session}
+                    />
+                  </div>
+                  <div className="timeline-area" ref={(el) => {
+                    if (el && lastResult) el.scrollTop = el.scrollHeight;
+                  }}>
+                    {steps.length === 0 && !isExecuting ? (
+                      <EmptyState onSuggestion={handleExecute} />
+                    ) : steps.length === 0 && isExecuting ? (
+                      <ExecutingState />
+                    ) : (
+                      <>
+                        <AgentReasoningPanel
+                          marketplace={marketplace}
+                          txHash={txHash}
+                          isExecuting={isExecuting}
+                          steps={steps}
+                        />
+                        <Timeline steps={steps} />
+                      </>
+                    )}
+                    {lastResult !== null && !isExecuting && <ResultPanel result={lastResult} />}
+                  </div>
+                </motion.div>
+              )}
+              {activeView === "demo" && (
+                <motion.div key="demo" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  style={{ flex: 1, overflowY: "auto", padding: "var(--s6) var(--s8)" }}>
+                  <div style={{ marginBottom: "var(--s6)" }}>
+                    <h2 className="h2" style={{ marginBottom: "var(--s2)" }}>Live Demo</h2>
+                    <p className="body">Agent discovers services, selects cheapest, pays autonomously, returns verifiable proof.</p>
+                  </div>
+                  <AgentPanel sessionId={session?.id ?? null} />
+                </motion.div>
+              )}
+              {activeView === "bazaar" && (
+                <motion.div key="bazaar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, minHeight: 0 }}>
+                  <BazaarView catalog={catalog} />
+                </motion.div>
+              )}
+              {activeView === "payments" && (
+                <motion.div key="payments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, minHeight: 0 }}>
+                  <PaymentsView />
+                </motion.div>
+              )}
+              {activeView === "settings" && (
+                <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, minHeight: 0 }}>
+                  <SettingsView session={session} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </main>
+
+          <aside className="workspace-drawer" style={{ gap: "var(--s5)" }}>
+            <BudgetDrawer summary={summary} />
+            <ToolsPanel catalog={catalog} />
+          </aside>
+        </>
+      )}
     </div>
   );
 }
