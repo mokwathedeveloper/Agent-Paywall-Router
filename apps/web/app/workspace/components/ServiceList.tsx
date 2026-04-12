@@ -34,9 +34,10 @@ const COLORS: Record<string, string> = {
 interface Props {
   onSelect?: (service: ServiceEntry) => void;
   selectedId?: string | null;
+  onServicesLoaded?: (services: ServiceEntry[]) => void;
 }
 
-export function ServiceList({ onSelect, selectedId }: Props) {
+export function ServiceList({ onSelect, selectedId, onServicesLoaded }: Props) {
   const [services, setServices] = useState<ServiceEntry[]>([]);
   const [cheapestId, setCheapestId] = useState<string | null>(null);
   const [agentHint, setAgentHint] = useState<string>("");
@@ -52,6 +53,7 @@ export function ServiceList({ onSelect, selectedId }: Props) {
         setServices(d.services ?? []);
         setCheapestId(d.cheapest?.id ?? null);
         setAgentHint(d.agentHint ?? "");
+        onServicesLoaded?.(d.services ?? []);
       })
       .catch(() => setError("Failed to load services"))
       .finally(() => setLoading(false));

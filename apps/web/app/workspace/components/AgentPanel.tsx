@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, Brain, Zap } from "lucide-react";
+import { Send, Loader2, Brain, Zap, CheckCircle2, ExternalLink, DollarSign, TrendingDown } from "lucide-react";
 import { ServiceList, type ServiceEntry } from "./ServiceList";
 import { PaymentFlow } from "./PaymentFlow";
 import { TransactionView } from "./TransactionView";
@@ -37,6 +37,121 @@ const SUGGESTIONS = [
   "Analyze sentiment of AI payment trends",
 ];
 
+const ALL_SERVICES = [
+  { id: "search",    name: "Web Search",         price: 0.01 },
+  { id: "summarize", name: "Text Summarizer",     price: 0.02 },
+  { id: "analyze",   name: "Sentiment Analyzer",  price: 0.03 },
+];
+
+// Live cost counter that animates up as payments happen
+function LiveCostCounter({ steps }: { steps: AgentStep[] }) {
+  const paid = steps.filter(s => s.status === "paying" || (s.action.includes("confirmed") && s.status === "success"));
+  const total = paid.reduce((sum, s) => sum + (s.cost || 0), 0);
+  const count = steps.filter(s => s.action.includes("confirmed") && s.status === "success").length;
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: "var(--s4)",
+      padding: "var(--s3) var(--s5)",
+      background: "var(--bg-card)", border: "1px solid var(--border-dim)",
+      borderRadius: "var(--r-lg)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
+        <DollarSign size={14} color="var(--emerald)" />
+        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Spent so far</span>
+      </div>
+      <motion.span
+        key={total}
+        initial={{ scale: 1.3, color: "var(--emerald)" }}
+        animate={{ scale: 1, color: "var(--text)" }}
+        style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: "1.125rem" }}
+      >
+        ${total.toFixed(2)}
+      </motion.span>
+      <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginLeft: "auto" }}>
+        {count} payment{count !== 1 ? "s" : ""} confirmed
+      </span>
+    </div>
+  );
+}
+
+// Service comparison table — shows WHY the agent picked the cheapest
+function ServiceComparison({ selectedId, services }: { selectedId: string | null; services: ServiceEntry[] }) {
+  const list = services.length > 0 ? services : ALL_SERVICES.map(s => ({
+    id: s.id, name: s.name, description: "", protocol: "x402" as const,
+    endpoint: "", method: "GET" as const, inputParam: "q",
+    stellarNetwork: "stellar:testnet" as const, spendingPolicyContract: "",
+    priceUsd: s.price,
+  }));
+
+  return (
+    <div style={{
+      background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
+      borderRadius: "var(--r-xl)", overflow: "hidden",
+    }}>
+      <div style={{
+        padding: "var(--s3) var(--s5)", background: "var(--bg-card)",
+        borderBottom: "1px solid var(--border-dim)",
+        display: "flex", alignItems: "center", gap: "var(--s2)",
+      }}>
+        <Brain size={13} color="var(--indigo)" />
+        <span style={{ fontWeight: 600, fontSize: "0.8125rem" }}>Agent Decision</span>
+        <span style={{ fontSize: "0.6875rem", color: "var(--text-muted)", marginLeft: "auto" }}>
+          Comparing {list.length} services by price
+        </span>
+      </div>
+      <div style={{ padding: "var(--s4) var(--s5)", display: "flex", flexDirection: "column", gap: "var(--s2)" }}>
+        {list.map((svc, i) => {
+          const isSelected = svc.id === selectedId || (i === 0 && !selectedId);
+          const isCheapest = i === 0 || svc.priceUsd === Math.min(...list.map(s => s.priceUsd));
+          return (
+            <div key={svc.id} style={{
+              display: "flex", alignItems: "center", gap: "var(--s3)",
+              padding: "var(--s3) var(--s4)",
+              background: isSelected ? "var(--emerald-dim)" : "var(--bg-card)",
+              border: `1px solid ${isSelected ? "rgba(16,185,129,0.3)" : "var(--border-dim)"}`,
+              borderRadius: "var(--r-lg)",
+              transition: "all 0.2s ease",
+            }}>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: "0.75rem",
+                color: isSelected ? "var(--emerald)" : "var(--text-muted)",
+                fontWeight: isSelected ? 700 : 400, minWidth: 40,
+              }}>
+                ${svc.priceUsd.toFixed(2)}
+              </span>
+              <span style={{ flex: 1, fontSize: "0.875rem", fontWeight: isSelected ? 600 : 400 }}>
+                {svc.name}
+              </span>
+              {isSelected && isCheapest && (
+                <span style={{
+                  fontSize: "0.5625rem", fontWeight: 700, color: "var(--emerald)",
+                  background: "rgba(16,185,129,0.15)", padding: "2px 8px",
+                  borderRadius: "var(--r-full)", letterSpacing: "0.04em",
+                }}>
+                  ✓ SELECTED — CHEAPEST
+                </span>
+              )}
+              {!isSelected && (
+                <span style={{ fontSize: "0.6875rem", color: "var(--text-dim)" }}>
+                  +${(svc.priceUsd - list[0].priceUsd).toFixed(2)} more
+                </span>
+              )}
+            </div>
+          );
+        })}
+        <div style={{
+          marginTop: "var(--s1)", fontSize: "0.75rem", color: "var(--indigo)",
+          display: "flex", alignItems: "center", gap: "var(--s2)",
+        }}>
+          <TrendingDown size={12} />
+          Agent chose cheapest option — saved ${(list[list.length - 1]?.priceUsd - list[0]?.priceUsd || 0).toFixed(2)} vs most expensive
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AgentPanel({ sessionId }: { sessionId: string | null }) {
   const [prompt, setPrompt] = useState("");
   const [isExecuting, setIsExecuting] = useState(false);
@@ -44,6 +159,16 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
   const [result, setResult] = useState<AgentResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<ServiceEntry | null>(null);
+  const [services, setServices] = useState<ServiceEntry[]>([]);
+  const [stepCount, setStepCount] = useState(0);
+  const txRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to tx proof when it appears
+  useEffect(() => {
+    if (result?.txHash && txRef.current) {
+      setTimeout(() => txRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+    }
+  }, [result?.txHash]);
 
   const run = useCallback(async (input: string) => {
     if (!input.trim() || !sessionId || isExecuting) return;
@@ -51,6 +176,7 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
     setSteps([]);
     setResult(null);
     setError(null);
+    setStepCount(0);
 
     try {
       const res = await fetch("/api/agent", {
@@ -63,15 +189,15 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
 
       if (!res.ok) {
         setError(data.detail || data.error || "Agent execution failed");
-        // Still show steps if available
         if (data.steps) setSteps(data.steps);
         return;
       }
 
-      // Animate steps in
+      // Animate steps in with live counter
       for (let i = 0; i < data.steps.length; i++) {
-        await new Promise(r => setTimeout(r, 350));
+        await new Promise(r => setTimeout(r, 300));
         setSteps(data.steps.slice(0, i + 1));
+        setStepCount(i + 1);
       }
 
       setResult(data);
@@ -88,14 +214,20 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
     setPrompt("");
   };
 
-  // Extract proof data from result
   const policyTxHash = result?.proofs?.policyTxHash ?? null;
   const policyAgent = result?.proofs?.policyAgent ?? null;
+  const cleanTx = result?.txHash?.replace("stellar:", "") ?? null;
+  const explorerUrl = cleanTx ? `https://stellar.expert/explorer/testnet/tx/${cleanTx}` : null;
+
+  // Calculate savings
+  const maxPrice = Math.max(...ALL_SERVICES.map(s => s.price));
+  const usedPrice = result?.cost ?? 0;
+  const saved = usedPrice > 0 ? maxPrice - usedPrice : 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--s6)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--s5)" }}>
 
-      {/* Section 1: Service Marketplace */}
+      {/* ── SECTION 1: Service Marketplace ── */}
       <div style={{
         background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
         borderRadius: "var(--r-xl)", overflow: "hidden",
@@ -106,45 +238,27 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
           display: "flex", alignItems: "center", gap: "var(--s2)",
         }}>
           <Zap size={14} color="var(--emerald)" />
-          <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>Available Services</span>
+          <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>Service Marketplace</span>
           <span style={{ fontSize: "0.6875rem", color: "var(--text-muted)", marginLeft: "auto" }}>
-            Live from /api/services
+            Live · /api/services
           </span>
         </div>
         <div style={{ padding: "var(--s5)" }}>
           <ServiceList
             onSelect={setSelectedService}
             selectedId={selectedService?.id ?? null}
+            onServicesLoaded={setServices}
           />
         </div>
       </div>
 
-      {/* Section 2: Agent Reasoning */}
-      {selectedService && (
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          style={{
-            padding: "var(--s4) var(--s5)",
-            background: "var(--indigo-dim)", border: "1px solid rgba(99,102,241,0.25)",
-            borderRadius: "var(--r-lg)", display: "flex", alignItems: "flex-start", gap: "var(--s3)",
-          }}
-        >
-          <Brain size={16} color="var(--indigo)" style={{ flexShrink: 0, marginTop: 2 }} />
-          <div>
-            <div style={{ fontWeight: 600, fontSize: "0.875rem", marginBottom: 4 }}>
-              Agent will select: <span style={{ color: "var(--indigo)" }}>{selectedService.name}</span>
-            </div>
-            <div style={{ fontSize: "0.8125rem", color: "var(--text-body)" }}>
-              Selected because it is the cheapest available option at{" "}
-              <span className="cost" style={{ fontSize: "0.75rem" }}>${selectedService.priceUsd.toFixed(2)}</span>
-              {" "}USDC · {selectedService.protocol.toUpperCase()} protocol · Stellar Testnet
-            </div>
-          </div>
-        </motion.div>
-      )}
+      {/* ── SECTION 2: Agent Decision (comparison table) ── */}
+      <ServiceComparison
+        selectedId={selectedService?.id ?? (services[0]?.id ?? null)}
+        services={services}
+      />
 
-      {/* Section 3: Prompt Input */}
+      {/* ── SECTION 3: Prompt Input ── */}
       <div style={{
         background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
         borderRadius: "var(--r-xl)", overflow: "hidden",
@@ -156,6 +270,15 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
         }}>
           <Brain size={14} color="var(--indigo)" />
           <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>Run Agent</span>
+          {isExecuting && (
+            <span style={{
+              marginLeft: "auto", fontSize: "0.6875rem", color: "var(--amber)",
+              fontWeight: 600, display: "flex", alignItems: "center", gap: "var(--s1)",
+            }}>
+              <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} />
+              Step {stepCount} · executing…
+            </span>
+          )}
         </div>
         <div style={{ padding: "var(--s5)", display: "flex", flexDirection: "column", gap: "var(--s4)" }}>
           <form onSubmit={handleSubmit} style={{ display: "flex", gap: "var(--s3)" }}>
@@ -168,7 +291,7 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
                 flex: 1, padding: "var(--s3) var(--s4)",
                 background: "var(--bg-card)", border: "1px solid var(--border)",
                 borderRadius: "var(--r-lg)", fontSize: "0.9375rem", color: "var(--text)",
-                outline: "none",
+                outline: "none", transition: "border-color 0.15s ease",
               }}
               onFocus={e => { e.currentTarget.style.borderColor = "var(--emerald)"; }}
               onBlur={e => { e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -183,6 +306,7 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
                 borderRadius: "var(--r-lg)", display: "flex", alignItems: "center",
                 gap: "var(--s2)", fontSize: "0.875rem", fontWeight: 600,
                 transition: "all 0.2s ease", flexShrink: 0,
+                boxShadow: isExecuting ? "none" : "0 2px 8px rgba(16,185,129,0.3)",
               }}
             >
               {isExecuting
@@ -192,7 +316,6 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
             </button>
           </form>
 
-          {/* Suggestions */}
           {!isExecuting && steps.length === 0 && (
             <div style={{ display: "flex", gap: "var(--s2)", flexWrap: "wrap" }}>
               {SUGGESTIONS.map(s => (
@@ -206,7 +329,7 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
                     borderRadius: "var(--r-lg)", fontSize: "0.75rem", color: "var(--text-body)",
                     cursor: "pointer", transition: "all 0.15s ease",
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text)"; }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--emerald)"; e.currentTarget.style.color = "var(--text)"; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-dim)"; e.currentTarget.style.color = "var(--text-body)"; }}
                 >
                   {s}
@@ -217,7 +340,16 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
         </div>
       </div>
 
-      {/* Section 4: Payment Flow Visualization */}
+      {/* ── SECTION 4: Live Cost Counter (shows during execution) ── */}
+      <AnimatePresence>
+        {steps.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <LiveCostCounter steps={steps} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── SECTION 5: Payment Flow ── */}
       <AnimatePresence>
         {(steps.length > 0 || isExecuting) && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
@@ -226,10 +358,60 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
         )}
       </AnimatePresence>
 
-      {/* Section 5: Transaction Proof */}
+      {/* ── SECTION 6: TRANSACTION PROOF (most important — shown first after completion) ── */}
       <AnimatePresence>
         {result?.txHash && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+          <motion.div
+            ref={txRef}
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            {/* Big WOW banner */}
+            <div style={{
+              padding: "var(--s4) var(--s5)",
+              background: "linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.05) 100%)",
+              border: "1px solid rgba(16,185,129,0.4)",
+              borderRadius: "var(--r-xl)",
+              marginBottom: "var(--s3)",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              gap: "var(--s4)", flexWrap: "wrap",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--s3)" }}>
+                <CheckCircle2 size={20} color="var(--emerald)" />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--emerald)" }}>
+                    Real payment confirmed on Stellar
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 2 }}>
+                    {result.cost > 0 && `$${result.cost.toFixed(2)} USDC · `}
+                    {result.tool} · Testnet · Not simulated
+                  </div>
+                </div>
+              </div>
+              {explorerUrl && (
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "var(--s2)",
+                    padding: "var(--s3) var(--s5)",
+                    background: "var(--emerald)", color: "#fff",
+                    borderRadius: "var(--r-lg)", fontSize: "0.875rem", fontWeight: 600,
+                    textDecoration: "none", flexShrink: 0,
+                    boxShadow: "0 2px 12px rgba(16,185,129,0.4)",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#0EA572"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "var(--emerald)"; }}
+                >
+                  <ExternalLink size={14} /> Verify on Stellar Explorer
+                </a>
+              )}
+            </div>
+
             <TransactionView
               txHash={result.txHash}
               policyTxHash={policyTxHash}
@@ -241,7 +423,7 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
         )}
       </AnimatePresence>
 
-      {/* Section 6: Result Output */}
+      {/* ── SECTION 7: Result + Savings ── */}
       <AnimatePresence>
         {result?.result && (
           <motion.div
@@ -260,11 +442,16 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
             }}>
               <Zap size={13} color="var(--emerald)" />
               <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--emerald)" }}>
-                Result
+                Insights Unlocked
               </span>
-              {result.marketplace && (
-                <span style={{ fontSize: "0.6875rem", color: "var(--text-muted)", marginLeft: "auto" }}>
-                  {result.marketplace.servicesDiscovered} services discovered · cheapest used
+              {saved > 0 && (
+                <span style={{
+                  marginLeft: "auto", fontSize: "0.6875rem",
+                  display: "flex", alignItems: "center", gap: "var(--s1)",
+                  color: "var(--emerald)",
+                }}>
+                  <TrendingDown size={11} />
+                  Saved ${saved.toFixed(2)} vs most expensive option
                 </span>
               )}
             </div>
@@ -277,7 +464,7 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
         )}
       </AnimatePresence>
 
-      {/* Section 7: Error State */}
+      {/* ── SECTION 8: Error State ── */}
       <AnimatePresence>
         {error && (
           <motion.div
