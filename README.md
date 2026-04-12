@@ -84,6 +84,36 @@ Take the `txHash` and verify it at:
 
 ---
 
+## 🔗 On-Chain Proof
+
+Every paid request generates a real, verifiable transaction on Stellar testnet. These are not simulated.
+
+| Tool | Amount | Transaction | Verified |
+|---|---|---|---|
+| Search API | $0.01 USDC | [b4560105...](https://stellar.expert/explorer/testnet/tx/b4560105d68f7e1fdb3f3ca9855a3ff97721d251dc8eb1c4d30185252e460425) | ✅ Apr 11, 2026 |
+| Search API | $0.01 USDC | [39760c8c...](https://stellar.expert/explorer/testnet/tx/39760c8cedacbfa5596cb0337ba2b4b911885382337cf78c1e7fde9dd9d0fcea) | ✅ Apr 11, 2026 |
+| Soroban Policy | on-chain | [90fc551e...](https://stellar.expert/explorer/testnet/tx/90fc551e37ff384a3033cf09ed888813798e55a967c908ad5dbe7138472df756) | ✅ Apr 11, 2026 |
+
+Verify any transaction independently:
+
+```bash
+# Stellar Expert
+https://stellar.expert/explorer/testnet/tx/<hash>
+
+# Horizon API (raw JSON)
+https://horizon-testnet.stellar.org/transactions/<hash>
+```
+
+The Soroban spending policy contract that authorized these payments:
+
+```
+CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ
+```
+
+[View contract on Stellar Expert ↗](https://stellar.expert/explorer/testnet/contract/CABLFWICBLK5IX3EWQSVQGS6WIQ2V7YLNLA6HIPGLGEDCO4DKOQQSWOQ)
+
+---
+
 ## Architecture
 
 ```
