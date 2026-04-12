@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, Send, AlertCircle } from "lucide-react";
 
 interface Props {
@@ -12,6 +12,9 @@ interface Props {
 export function PromptBox({ onSubmit, isExecuting, sessionReady }: Props) {
   const [value, setValue] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +36,8 @@ export function PromptBox({ onSubmit, isExecuting, sessionReady }: Props) {
   };
 
   const isDisabled = isExecuting || !sessionReady;
+  const effectiveExecuting = mounted && isExecuting;
+  const effectiveReady = mounted && sessionReady;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--s2)" }}>
@@ -40,7 +45,7 @@ export function PromptBox({ onSubmit, isExecuting, sessionReady }: Props) {
         onSubmit={handleSubmit}
         style={{
           background: "var(--bg-surface)",
-          border: `1px solid ${isExecuting ? "var(--amber)" : "var(--border)"}`,
+          border: `1px solid ${effectiveExecuting ? "var(--amber)" : "var(--border)"}`,
           borderRadius: "var(--r-xl)",
           padding: "4px 4px 4px var(--s5)",
           display: "flex",
@@ -54,13 +59,13 @@ export function PromptBox({ onSubmit, isExecuting, sessionReady }: Props) {
           onChange={e => { setValue(e.target.value); setSubmitError(null); }}
           type="text"
           placeholder={
-            !sessionReady
+            !effectiveReady
               ? "Initializing session…"
-              : isExecuting
+              : effectiveExecuting
               ? "Agent is running…"
               : "Give the agent a task (e.g. 'Search for Stellar news')"
           }
-          disabled={isDisabled}
+          disabled={!mounted || isDisabled}
           aria-label="Agent prompt"
           style={{
             flex: 1,
@@ -75,11 +80,11 @@ export function PromptBox({ onSubmit, isExecuting, sessionReady }: Props) {
         />
         <button
           type="submit"
-          disabled={isDisabled || !value.trim()}
-          aria-label={isExecuting ? "Executing…" : "Run agent"}
+          disabled={!mounted || isDisabled || !value.trim()}
+          aria-label={effectiveExecuting ? "Executing…" : "Run agent"}
           style={{
-            background: isDisabled ? "var(--bg-hover)" : "var(--emerald)",
-            color: isDisabled ? "var(--text-muted)" : "#fff",
+            background: (!mounted || isDisabled) ? "var(--bg-hover)" : "var(--emerald)",
+            color: (!mounted || isDisabled) ? "var(--text-muted)" : "#fff",
             padding: "var(--s3) var(--s5)",
             borderRadius: "var(--r-lg)",
             display: "flex",
@@ -87,15 +92,15 @@ export function PromptBox({ onSubmit, isExecuting, sessionReady }: Props) {
             gap: "var(--s2)",
             marginLeft: "var(--s3)",
             transition: "all 0.2s ease",
-            boxShadow: isDisabled ? "none" : "0 2px 8px rgba(16,185,129,0.3)",
+            boxShadow: (!mounted || isDisabled) ? "none" : "0 2px 8px rgba(16,185,129,0.3)",
             fontSize: "0.875rem",
             fontWeight: 600,
             whiteSpace: "nowrap",
           }}
         >
-          {isExecuting
+          {effectiveExecuting
             ? <><Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> Running…</>
-            : !sessionReady
+            : !effectiveReady
             ? <><Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> Loading…</>
             : <><Send size={16} /> Run Agent</>
           }

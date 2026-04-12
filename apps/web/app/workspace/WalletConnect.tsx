@@ -14,14 +14,28 @@ export default function WalletConnect() {
   const [wallet, setWallet] = useState<WalletState | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
-  // Rehydrate from localStorage on mount
   useEffect(() => {
+    setMounted(true);
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) setWallet(JSON.parse(stored));
     } catch { /* ignore */ }
   }, []);
+
+  if (!mounted) return (
+    <div style={{
+      background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
+      borderRadius: "var(--r-xl)", padding: "var(--s5)",
+      display: "flex", flexDirection: "column", gap: "var(--s4)",
+    }}>
+      <div style={{ fontWeight: 600, fontSize: "0.875rem" }}>Connect Freighter Wallet</div>
+      <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+        Connect your Freighter wallet to view your Stellar account on-chain.
+      </p>
+    </div>
+  );
 
   const connect = async () => {
     setConnecting(true);

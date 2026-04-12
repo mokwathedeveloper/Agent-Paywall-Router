@@ -49,6 +49,17 @@ export default function WorkspacePage() {
     policyExplorerLink: string | null;
   } | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!mounted) {
+    return (
+      <div className="workspace-layout" style={{ alignItems: "center", justifyContent: "center" }}>
+        <div style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>Loading…</div>
+      </div>
+    );
+  }
 
   // Initialize session — reuse persisted session or create new one
   useEffect(() => {
