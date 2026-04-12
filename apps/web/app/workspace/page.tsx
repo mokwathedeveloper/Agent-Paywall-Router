@@ -469,54 +469,24 @@ function ExecutingState() {
 }
 
 /* ─── Empty State ─── */
-function EmptyState({ onSuggestion }: { onSuggestion: (prompt: string) => void }) {
-  const suggestions = [
-    "Search for latest Stellar news",
-    "Summarize the x402 protocol whitepaper",
-    "Analyze sentiment of AI payment trends",
-  ];
-  const { isExecuting } = useAppStore();
-
+function EmptyState({ onSuggestion: _onSuggestion }: { onSuggestion: (prompt: string) => void }) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
       justifyContent: "center", height: "100%", color: "var(--text-muted)",
-      gap: "var(--s5)", paddingBottom: "var(--s16)", textAlign: "center",
+      gap: "var(--s4)", paddingBottom: "var(--s16)", textAlign: "center",
     }}>
       <div style={{
-        width: 80, height: 80, borderRadius: "var(--r-xl)",
+        width: 64, height: 64, borderRadius: "var(--r-xl)",
         background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        transform: "rotate(-3deg)",
       }}>
-        <Zap size={32} strokeWidth={1.5} color="var(--text-body)" />
+        <Zap size={28} strokeWidth={1.5} color="var(--text-body)" />
       </div>
       <div>
-        <h3 className="h3" style={{ marginBottom: "var(--s2)", color: "var(--text)" }}>Awaiting Orders</h3>
-        <p className="body">
-          Type a request above to initiate the agent.<br />
-          It will handle tool discovery and payments automatically.
+        <p className="body" style={{ color: "var(--text-muted)" }}>
+          Type a prompt above to start the agent.
         </p>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--s2)", width: "100%", maxWidth: 400 }}>
-        <div className="caption" style={{ marginBottom: "var(--s1)" }}>Try a suggestion</div>
-        {suggestions.map((s) => (
-          <button
-            key={s}
-            onClick={() => onSuggestion(s)}
-            disabled={isExecuting}
-            style={{
-              padding: "var(--s3) var(--s4)", background: "var(--bg-surface)",
-              border: "1px solid var(--border-dim)", borderRadius: "var(--r-lg)",
-              fontSize: "0.875rem", color: "var(--text-body)", textAlign: "left",
-              transition: "all var(--normal) var(--ease)", cursor: "pointer",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-dim)"; e.currentTarget.style.color = "var(--text-body)"; }}
-          >
-            {s}
-          </button>
-        ))}
       </div>
     </div>
   );
