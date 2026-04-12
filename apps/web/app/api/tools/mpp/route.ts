@@ -26,7 +26,7 @@ async function getMppx() {
       stellar.charge({
         recipient: process.env.STELLAR_RECEIVER_ADDRESS,
         currency: USDC_SAC_TESTNET,
-        network: "stellar:testnet",
+        network: "testnet",
       }),
     ],
   });
