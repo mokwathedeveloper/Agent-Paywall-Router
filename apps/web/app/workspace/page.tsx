@@ -188,13 +188,17 @@ export default function WorkspacePage() {
             <motion.div key="workspace" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               <div style={{ padding: "var(--s6)", borderBottom: "1px solid var(--border-dim)", flexShrink: 0 }}>
-                <PromptBox onSubmit={handleExecute} isExecuting={isExecuting} />
+                <PromptBox
+                  onSubmit={handleExecute}
+                  isExecuting={isExecuting}
+                  sessionReady={!!session}
+                />
               </div>
               <div className="timeline-area" ref={(el) => {
                 if (el && lastResult) el.scrollTop = el.scrollHeight;
               }}>
                 {steps.length === 0 && !isExecuting ? (
-                  <EmptyState />
+                  <EmptyState onSuggestion={handleExecute} />
                 ) : steps.length === 0 && isExecuting ? (
                   <ExecutingState />
                 ) : (
@@ -458,36 +462,13 @@ function ExecutingState() {
 }
 
 /* ─── Empty State ─── */
-function EmptyState() {
+function EmptyState({ onSuggestion }: { onSuggestion: (prompt: string) => void }) {
   const suggestions = [
     "Search for latest Stellar news",
     "Summarize the x402 protocol whitepaper",
     "Analyze sentiment of AI payment trends",
   ];
   const { isExecuting } = useAppStore();
-  const { setSteps, setIsExecuting, setLastResult, setSummary, setTransactions, session, clearSteps } = useAppStore();
-
-  const handleSuggestion = useCallback(async (prompt: string) => {
-    if (!session || isExecuting) return;
-    clearSteps();
-    setIsExecuting(true);
-    setLastResult(null);
-    try {
-      const data = await executeAgentTask(prompt, session.id);
-      for (let i = 0; i < data.steps.length; i++) {
-        await new Promise((r) => setTimeout(r, 400));
-        setSteps(data.steps.slice(0, i + 1));
-      }
-      setLastResult({ text: data.result, toolOutputs: data.toolOutputs ?? [] });
-      if (data.summary) setSummary(data.summary);
-      const txData = await fetchTransactions(session.id);
-      setTransactions(txData.transactions);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsExecuting(false);
-    }
-  }, [session, isExecuting, clearSteps, setIsExecuting, setSteps, setLastResult, setSummary, setTransactions]);
 
   return (
     <div style={{
@@ -515,7 +496,7 @@ function EmptyState() {
         {suggestions.map((s) => (
           <button
             key={s}
-            onClick={() => handleSuggestion(s)}
+            onClick={() => onSuggestion(s)}
             disabled={isExecuting}
             style={{
               padding: "var(--s3) var(--s4)", background: "var(--bg-surface)",
