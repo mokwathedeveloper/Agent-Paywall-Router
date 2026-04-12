@@ -16,6 +16,7 @@ import { ResultPanel } from "./components/ResultPanel";
 import { BudgetDrawer } from "./components/BudgetDrawer";
 import { BazaarView } from "./components/BazaarView";
 import { PaymentsView } from "./components/PaymentsView";
+import { AgentReasoningPanel } from "./components/AgentReasoningPanel";
 
 const WalletConnect = dynamic(() => import("./WalletConnect"), { ssr: false, loading: () => null });
 const WalletConnectSidebar = dynamic(() => import("./WalletConnect"), { ssr: false, loading: () => null });
@@ -39,6 +40,14 @@ export default function WorkspacePage() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
+  const [marketplace, setMarketplace] = useState<{
+    servicesDiscovered: number;
+    cheapestService: string;
+    cheapestPriceUsd: number;
+    txExplorerLink: string | null;
+    policyExplorerLink: string | null;
+  } | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
 
   // Initialize session — reuse persisted session or create new one
   useEffect(() => {
@@ -116,6 +125,8 @@ export default function WorkspacePage() {
       clearSteps();
       setIsExecuting(true);
       setLastResult(null);
+      setMarketplace(null);
+      setTxHash(null);
 
       try {
         const data = await executeAgentTask(prompt, session.id);
@@ -125,6 +136,8 @@ export default function WorkspacePage() {
         }
         setLastResult({ text: data.result, toolOutputs: data.toolOutputs ?? [] });
         if (data.summary) setSummary(data.summary);
+        if (data.marketplace) setMarketplace(data.marketplace);
+        if (data.txHash) setTxHash(data.txHash);
         const txData = await fetchTransactions(session.id);
         setTransactions(txData.transactions);
       } catch (err) {
@@ -182,7 +195,15 @@ export default function WorkspacePage() {
                 {steps.length === 0 && !isExecuting ? (
                   <EmptyState />
                 ) : (
-                  <Timeline steps={steps} />
+                  <>
+                    <AgentReasoningPanel
+                      marketplace={marketplace}
+                      txHash={txHash}
+                      isExecuting={isExecuting}
+                      steps={steps}
+                    />
+                    <Timeline steps={steps} />
+                  </>
                 )}
                 {lastResult !== null && !isExecuting && <ResultPanel result={lastResult} />}
               </div>

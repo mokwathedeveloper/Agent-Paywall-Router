@@ -1,11 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, FileText, BarChart3, Zap, X } from "lucide-react";
+import { Search, FileText, BarChart3, Zap, X, Trophy } from "lucide-react";
 import type { Tool } from "@/lib/store";
 
 const ease = [0.22, 1, 0.36, 1] as const;
+
+interface ServiceEntry {
+  id: string;
+  name: string;
+  description: string;
+  priceUsd: number;
+  protocol: string;
+  endpoint: string;
+  method: string;
+}
 
 interface Props {
   catalog: Tool[];
@@ -21,6 +31,18 @@ function ToolIcon({ id, isMpp }: { id: string; isMpp: boolean }) {
 
 export function BazaarView({ catalog }: Props) {
   const [specTool, setSpecTool] = useState<Tool | null>(null);
+  const [services, setServices] = useState<ServiceEntry[]>([]);
+  const [cheapestId, setCheapestId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/services")
+      .then(r => r.json())
+      .then(d => {
+        setServices(d.services ?? []);
+        setCheapestId(d.cheapest?.id ?? null);
+      })
+      .catch(() => null);
+  }, []);
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "var(--s6) var(--s8)" }}>
@@ -64,8 +86,21 @@ export function BazaarView({ catalog }: Props) {
                 }}>
                   <ToolIcon id={tool.id} isMpp={isMpp} />
                 </div>
-                <div className="badge badge-neutral" style={{ fontSize: "0.6875rem" }}>
-                  {isMpp ? "MPP" : "x402"}
+                <div style={{ display: "flex", gap: "var(--s2)", alignItems: "center" }}>
+                  {cheapestId === tool.id && (
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 3,
+                      padding: "2px 8px", borderRadius: "var(--r-full)",
+                      background: "var(--emerald-dim)", border: "1px solid rgba(16,185,129,0.3)",
+                      fontSize: "0.5625rem", fontWeight: 700, color: "var(--emerald)",
+                      letterSpacing: "0.04em",
+                    }}>
+                      <Trophy size={9} /> CHEAPEST
+                    </div>
+                  )}
+                  <div className="badge badge-neutral" style={{ fontSize: "0.6875rem" }}>
+                    {isMpp ? "MPP" : "x402"}
+                  </div>
                 </div>
               </div>
 
@@ -111,6 +146,18 @@ export function BazaarView({ catalog }: Props) {
           </p>
         </div>
       </div>
+
+      {services.length > 0 && (
+        <div style={{
+          marginTop: "var(--s5)", padding: "var(--s4) var(--s5)",
+          background: "var(--indigo-dim)", border: "1px solid rgba(99,102,241,0.2)",
+          borderRadius: "var(--r-lg)", fontSize: "0.8125rem", color: "var(--text-body)",
+          lineHeight: 1.6,
+        }}>
+          <span style={{ fontWeight: 600, color: "var(--indigo)" }}>Agent Hint: </span>
+          {services[0] && `Prefer ${services[0].name} ($${services[0].priceUsd.toFixed(2)}) for information retrieval — it is the cheapest option. Only use more expensive services if the task explicitly requires it.`}
+        </div>
+      )}
 
       {/* Spec Modal */}
       <AnimatePresence>

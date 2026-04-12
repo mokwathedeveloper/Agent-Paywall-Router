@@ -51,9 +51,13 @@ export function Timeline({ steps }: Props) {
           const Icon = STEP_ICONS[step.status] ?? Clock;
           const color = STEP_COLORS[step.status] ?? "var(--text-muted)";
           const isLast = i === steps.length - 1;
-          const txHash = step.action === "Payment confirmed"
-            ? step.detail.replace("tx: stellar:", "")
+          const txHash = step.detail.startsWith("tx: stellar:")
+            ? step.detail.replace("tx: stellar:", "").split(" ")[0]
             : null;
+          const is402 = step.status === "payment_required";
+          const isPaying = step.status === "paying";
+          const isConfirmed = step.action.includes("confirmed") && step.status === "success" && txHash;
+          const cardBorder = is402 ? "1px solid rgba(245,158,11,0.4)" : isPaying ? "1px solid rgba(99,102,241,0.4)" : isConfirmed ? "1px solid rgba(16,185,129,0.4)" : "1px solid var(--border)";
 
           return (
             <motion.div
@@ -80,7 +84,7 @@ export function Timeline({ steps }: Props) {
 
               <div style={{
                 flex: 1, minWidth: 0,
-                background: "var(--bg-surface)", border: "1px solid var(--border)",
+                background: "var(--bg-surface)", border: cardBorder,
                 borderRadius: "var(--r-xl)", padding: "var(--s4) var(--s5)",
                 boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
               }}>
