@@ -6,6 +6,7 @@ import {
   Search, FileText, BarChart3, Zap,
   CheckCircle2, AlertCircle, Clock, CreditCard, ExternalLink, Loader2,
 } from "lucide-react";
+import { useAppStore } from "@/lib/store";
 import type { DBTransaction } from "@/lib/types";
 
 const TOOL_ICON: Record<string, React.ElementType> = {
@@ -16,23 +17,30 @@ const TOOL_COLOR: Record<string, string> = {
 };
 
 export function PaymentsView() {
+  const { session } = useAppStore();
   const [transactions, setTransactions] = useState<DBTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
-    fetch("/api/transactions")
+    setLoading(true);
+    const url = showAll
+      ? "/api/transactions"
+      : session?.id
+      ? `/api/transactions?sessionId=${session.id}`
+      : "/api/transactions";
+
+    fetch(url)
       .then(r => r.json())
       .then(d => setTransactions(d.transactions ?? []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [showAll, session?.id]);
 
-  const totalSpent = transactions
-    .filter(t => t.status === "success")
-    .reduce((s, t) => s + t.amount, 0);
-
+  const successTxs = transactions.filter(t => t.status === "success");
+  const totalSpent = successTxs.reduce((s, t) => s + t.amount, 0);
   const successRate = transactions.length
-    ? Math.round((transactions.filter(t => t.status === "success").length / transactions.length) * 100)
+    ? Math.round((successTxs.length / transactions.length) * 100)
     : 0;
 
   if (loading) {
@@ -46,10 +54,31 @@ export function PaymentsView() {
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "var(--s6) var(--s8)" }}>
+
+      {/* Header with session toggle */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s6)", flexWrap: "wrap", gap: "var(--s3)" }}>
+        <div>
+          <h2 className="h3" style={{ marginBottom: "var(--s1)" }}>Payment Ledger</h2>
+          <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+            {showAll
+              ? "All sessions · Stellar Testnet"
+              : `Session: ${session?.id ?? "—"} · Stellar Testnet`
+            }
+          </div>
+        </div>
+        <button
+          onClick={() => setShowAll(v => !v)}
+          className="btn btn-secondary"
+          style={{ fontSize: "0.75rem" }}
+        >
+          {showAll ? "Show current session" : "Show all sessions"}
+        </button>
+      </div>
+
       {/* Summary strip */}
       <div style={{ display: "flex", gap: "var(--s3)", marginBottom: "var(--s6)", flexWrap: "wrap" }}>
         {[
-          { label: "Total Transactions", value: transactions.length },
+          { label: "Transactions", value: transactions.length },
           { label: "Total Spent", value: `$${totalSpent.toFixed(4)}` },
           { label: "Success Rate", value: `${successRate}%` },
         ].map(s => (
@@ -75,28 +104,30 @@ export function PaymentsView() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--s2)" }}>
           <div className="caption" style={{ marginBottom: "var(--s3)" }}>
-            Transaction History · {transactions.length} records
+            Transaction History · {transactions.length} record{transactions.length !== 1 ? "s" : ""}
           </div>
           {transactions.map((tx, i) => {
             const Icon = TOOL_ICON[tx.tool_name] ?? Zap;
             const color = TOOL_COLOR[tx.tool_name] ?? "var(--text-muted)";
             const cleanHash = tx.tx_hash?.replace("stellar:", "") ?? null;
+            const isCurrentSession = tx.session_id === session?.id;
 
             return (
               <motion.div
                 key={tx.id}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: Math.min(i * 0.03, 0.3) }}
+                transition={{ duration: 0.25, delay: Math.min(i * 0.02, 0.3) }}
                 style={{
                   display: "flex", alignItems: "center", gap: "var(--s4)",
                   padding: "var(--s4) var(--s5)",
-                  background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
+                  background: "var(--bg-surface)",
+                  border: `1px solid ${isCurrentSession && showAll ? "rgba(16,185,129,0.2)" : "var(--border-dim)"}`,
                   borderRadius: "var(--r-lg)",
                   transition: "border-color 150ms ease, background 150ms ease",
                 }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-card)"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-dim)"; e.currentTarget.style.background = "var(--bg-surface)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = isCurrentSession && showAll ? "rgba(16,185,129,0.2)" : "var(--border-dim)"; e.currentTarget.style.background = "var(--bg-surface)"; }}
               >
                 <div style={{
                   width: 36, height: 36, borderRadius: "var(--r-md)",
@@ -111,7 +142,8 @@ export function PaymentsView() {
                     {tx.tool_name}
                   </div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-                    {tx.session_id} · {tx.created_at
+                    {showAll && <span style={{ color: isCurrentSession ? "var(--emerald)" : "var(--text-dim)" }}>{tx.session_id} · </span>}
+                    {tx.created_at
                       ? new Date(tx.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
                       : "—"}
                   </div>
