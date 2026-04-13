@@ -27,12 +27,29 @@ export interface DBSession {
   created_at: string;
 }
 
+export interface DBService {
+  id: string;
+  name: string;
+  description: string;
+  price_usd: number;
+  protocol: "x402" | "mpp";
+  endpoint: string;
+  method: "GET" | "POST";
+  input_param: string;
+  stellar_network: string;
+  spending_policy_contract: string;
+  is_external: boolean;
+  created_at?: string;
+}
+
 export interface DBTransaction {
   id: string;
   session_id: string;
   endpoint: string;
   tool_name: string;
   amount: number;
+  provider_share: number;
+  agent_share: number;
   status: PaymentStatus;
   tx_hash: string | null;
   request_payload: Record<string, unknown>;
