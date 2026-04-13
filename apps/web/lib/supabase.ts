@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import type { DBSession, DBTransaction } from "@/lib/types";
+import type { DBSession, DBTransaction, DBService } from "@/lib/types";
 
 // Server-side DB credentials. Never use NEXT_PUBLIC_* keys for write access.
 const supabaseUrl = process.env.SUPABASE_URL ?? "";
@@ -14,4 +14,4 @@ export const supabase =
 
 export const isSupabaseConfigured = Boolean(supabase);
 
-export type { DBSession, DBTransaction };
+export type { DBSession, DBTransaction, DBService };
