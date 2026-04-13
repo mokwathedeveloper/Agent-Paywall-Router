@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, FileText, BarChart3, Zap, X, Trophy, Plus, Globe, Shield, Coins, ArrowRight } from "lucide-react";
+import { Search, FileText, BarChart3, Zap, X, Trophy, Plus, Globe, Shield, Coins, ArrowRight, Star } from "lucide-react";
 import type { Tool } from "@/lib/store";
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -15,6 +15,9 @@ interface ServiceEntry {
   protocol: string;
   endpoint: string;
   method: string;
+  rating?: number;
+  ratingCount?: number;
+  providerSplitPercentage?: number;
 }
 
 interface Props {
@@ -24,7 +27,7 @@ interface Props {
 function ToolIcon({ id, isMpp }: { id: string; isMpp: boolean }) {
   const color = isMpp ? "var(--indigo)" : id === "analyze" ? "var(--amber)" : "var(--emerald)";
   const size = 20;
-  if (id.includes("search")) return <Search size={size} color={color} />;
+  if (id.includes("search") || id.includes("weather")) return <Search size={size} color={color} />;
   if (id === "summarize") return <FileText size={size} color={color} />;
   return <BarChart3 size={size} color={color} />;
 }
@@ -32,14 +35,14 @@ function ToolIcon({ id, isMpp }: { id: string; isMpp: boolean }) {
 export function BazaarView({ catalog }: Props) {
   const [specTool, setSpecTool] = useState<Tool | null>(null);
   const [services, setServices] = useState<ServiceEntry[]>([]);
-  const [cheapestId, setCheapestId] = useState<string | null>(null);
+  const [bestValueId, setBestValueId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/services")
       .then(r => r.json())
       .then(d => {
         setServices(d.services ?? []);
-        setCheapestId(d.cheapest?.id ?? null);
+        setBestValueId(d.bestValue?.id ?? null);
       })
       .catch(() => null);
   }, []);
@@ -55,10 +58,39 @@ export function BazaarView({ catalog }: Props) {
         url: s.endpoint,
         method: s.method as any,
         protocol: s.protocol,
-        payment: { protocol: s.protocol as any, version: "2.0.0", network: "stellar:testnet", currency: "USDC" }
-      });
+        payment: { protocol: s.protocol as any, version: "2.0.0", network: "stellar:testnet", currency: "USDC" },
+        rating: s.rating,
+        ratingCount: s.ratingCount,
+        providerSplitPercentage: s.providerSplitPercentage,
+      } as any);
+    } else {
+      const existing = allServices.find(t => t.id === s.id) as any;
+      if (existing) {
+         existing.rating = s.rating;
+         existing.ratingCount = s.ratingCount;
+         existing.providerSplitPercentage = s.providerSplitPercentage;
+      }
     }
   });
+
+  const handleRate = async (id: string, rating: number) => {
+    try {
+      const res = await fetch("/api/services/rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, rating })
+      });
+      if (res.ok) {
+        alert("Thanks for rating!");
+        const updatedServicesRes = await fetch("/api/services");
+        const data = await updatedServicesRes.json();
+        setServices(data.services ?? []);
+        setBestValueId(data.bestValue?.id ?? null);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-deep)", position: "relative", overflow: "hidden" }}>
@@ -73,7 +105,7 @@ export function BazaarView({ catalog }: Props) {
             <Zap size={16} color="var(--indigo)" style={{ flexShrink: 0 }} />
             <div>
               <span style={{ fontWeight: 700, color: "var(--indigo)" }}>AGENT HINT: </span>
-              {`Selected ${services[0].name} ($${services[0].priceUsd.toFixed(2)}) as optimal entry point.`}
+              {`Selected ${services[0].name} ($${services[0].priceUsd.toFixed(2)}) as optimal entry point based on cost and reputation.`}
             </div>
           </div>
         )}
@@ -86,7 +118,11 @@ export function BazaarView({ catalog }: Props) {
         <div>
           <div className="caption" style={{ marginBottom: "var(--s5)", display: "flex", alignItems: "center", gap: "var(--s2)" }}><Globe size={14} /> Available Services</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "var(--s5)" }}>
-            {allServices.sort((a, b) => a.priceUsd - b.priceUsd).map((tool) => {
+            {allServices.sort((a: any, b: any) => {
+               const scoreA = a.priceUsd * (1 - (a.rating || 0) / 5);
+               const scoreB = b.priceUsd * (1 - (b.rating || 0) / 5);
+               return scoreA - scoreB;
+            }).map((tool: any) => {
               const isMpp = tool.payment?.protocol === "mpp";
               const bgColor = isMpp ? "var(--indigo-dim)" : tool.id === "analyze" ? "var(--amber-dim)" : "var(--emerald-dim)";
               return (
@@ -95,13 +131,22 @@ export function BazaarView({ catalog }: Props) {
                     <div style={{ width: 44, height: 44, borderRadius: "var(--r-lg)", background: bgColor, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <ToolIcon id={tool.id} isMpp={isMpp} />
                     </div>
-                    <div style={{ display: "flex", gap: "var(--s2)", alignItems: "center" }}>
-                      {cheapestId === tool.id && <div style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: "var(--r-full)", background: "var(--emerald-dim)", border: "1px solid rgba(16,185,129,0.3)", fontSize: "0.5625rem", fontWeight: 700, color: "var(--emerald)", letterSpacing: "0.04em" }}><Trophy size={9} /> CHEAPEST</div>}
+                    <div style={{ display: "flex", gap: "var(--s2)", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      {bestValueId === tool.id && <div style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: "var(--r-full)", background: "var(--emerald-dim)", border: "1px solid rgba(16,185,129,0.3)", fontSize: "0.5625rem", fontWeight: 700, color: "var(--emerald)", letterSpacing: "0.04em" }}><Trophy size={9} /> BEST VALUE</div>}
                       <div className="badge badge-neutral" style={{ fontSize: "0.6875rem" }}>{isMpp ? "MPP" : "x402"}</div>
                     </div>
                   </div>
                   <div>
-                    <h3 className="h3" style={{ fontSize: "1.125rem", marginBottom: "var(--s1)" }}>{tool.name}</h3>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--s1)" }}>
+                      <h3 className="h3" style={{ fontSize: "1.125rem", margin: 0 }}>{tool.name}</h3>
+                      {tool.rating !== undefined && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.75rem", fontWeight: 600 }}>
+                          <Star size={12} fill="currentColor" />
+                          <span>{tool.rating.toFixed(1)}</span>
+                          <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>({tool.ratingCount})</span>
+                        </div>
+                      )}
+                    </div>
                     <p className="body" style={{ fontSize: "0.875rem", height: "3.2em", overflow: "hidden" }}>{tool.description}</p>
                   </div>
                   <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "var(--s4)", borderTop: "1px solid var(--border-dim)" }}>
@@ -109,7 +154,13 @@ export function BazaarView({ catalog }: Props) {
                       <div className="caption" style={{ fontSize: "0.625rem" }}>Price</div>
                       <div className="cost" style={{ fontSize: "1.125rem" }}>${tool.priceUsd.toFixed(2)}</div>
                     </div>
-                    <button className="btn btn-secondary" style={{ fontSize: "0.75rem" }} onClick={() => setSpecTool(tool)}>View Spec</button>
+                    <div style={{ display: "flex", gap: "var(--s2)" }}>
+                      <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "6px 12px" }} onClick={() => {
+                        const r = prompt("Rate this service (1-5):");
+                        if (r && parseInt(r) >= 1 && parseInt(r) <= 5) handleRate(tool.id, parseInt(r, 10));
+                      }}>Rate</button>
+                      <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "6px 12px" }} onClick={() => setSpecTool(tool)}>View Spec</button>
+                    </div>
                   </div>
                 </motion.div>
               );
@@ -121,8 +172,8 @@ export function BazaarView({ catalog }: Props) {
         <div style={{ padding: "var(--s6)", background: "var(--bg-surface)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-xl)", display: "flex", alignItems: "center", gap: "var(--s6)" }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--emerald-dim)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Shield size={24} color="var(--emerald)" /></div>
           <div>
-            <h4 style={{ fontWeight: 600, marginBottom: 4 }}>Bazaar Discovery Active</h4>
-            <p className="body" style={{ fontSize: "0.875rem", margin: 0 }}>Tools are dynamically discovered via <code>/api/catalog</code>. Our agent logic always prioritizes the most cost-effective verifiable service.</p>
+            <h4 style={{ fontWeight: 600, marginBottom: 4 }}>Deterministic Discovery Active</h4>
+            <p className="body" style={{ fontSize: "0.875rem", margin: 0 }}>Tools are dynamically discovered via <code>/api/catalog</code>. Our agent logic balances <strong>Cost</strong> and <strong>Reputation Score</strong> to select the optimal service.</p>
           </div>
         </div>
 
@@ -196,6 +247,11 @@ export function BazaarView({ catalog }: Props) {
                 <div className="caption" style={{ marginBottom: "var(--s2)" }}>Description</div>
                 <textarea name="description" className="input" placeholder="What does your tool do? (shown to agents)" style={{ minHeight: "120px", resize: "none", lineHeight: 1.5 }} required />
               </div>
+              
+              <div>
+                <div className="caption" style={{ marginBottom: "var(--s2)" }}>Provider Split Percentage (e.g., 0.7 for 70%)</div>
+                <input name="provider_split_percentage" className="input" placeholder="0.7" defaultValue="0.7" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required />
+              </div>
 
               <button type="submit" className="btn btn-primary" style={{ padding: "var(--s4)", fontSize: "1rem", borderRadius: "var(--r-xl)", marginTop: "var(--s2)" }}>
                 <Plus size={20} /> Register My Service
@@ -251,6 +307,25 @@ export function BazaarView({ catalog }: Props) {
                     </div>
                   ))}
                 </div>
+                
+                {/* Provider Split Display */}
+                <div style={{ marginBottom: "var(--s6)", padding: "var(--s4)", background: "var(--bg-deep)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-md)", display: "flex", alignItems: "center", gap: "var(--s4)" }}>
+                   <div style={{ flex: 1 }}>
+                     <div className="caption" style={{ marginBottom: "var(--s1)", color: "var(--text-muted)" }}>Economic Model</div>
+                     <div style={{ fontSize: "0.875rem", color: "var(--text-body)" }}>
+                       <span style={{ fontWeight: 600, color: "var(--emerald)" }}>{((specTool as any).providerSplitPercentage ?? 0.7) * 100}%</span> Revenue Split to Provider
+                     </div>
+                   </div>
+                   <div style={{ flex: 1, borderLeft: "1px solid var(--border-dim)", paddingLeft: "var(--s4)" }}>
+                     <div className="caption" style={{ marginBottom: "var(--s1)", color: "var(--text-muted)" }}>Reputation</div>
+                     <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.875rem", fontWeight: 600 }}>
+                        <Star size={14} fill="currentColor" />
+                        <span>{(specTool as any).rating ? (specTool as any).rating.toFixed(1) : "New"}</span>
+                        <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>({(specTool as any).ratingCount ?? 0} reviews)</span>
+                      </div>
+                   </div>
+                </div>
+
                 <div style={{ marginBottom: "var(--s6)" }}>
                   <div className="caption" style={{ marginBottom: "var(--s3)" }}>Endpoint</div>
                   <code style={{ display: "block", padding: "var(--s4)", background: "var(--bg-deep)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-md)", fontSize: "0.875rem", color: "var(--emerald)", fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>{specTool.method} {specTool.url}</code>
