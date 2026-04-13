@@ -250,12 +250,12 @@ export default function WorkspacePage() {
                 </motion.div>
               )}
               {activeView === "payments" && (
-                <motion.div key="payments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, minHeight: 0 }}>
+                <motion.div key="payments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
                   <PaymentsView />
                 </motion.div>
               )}
               {activeView === "settings" && (
-                <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, minHeight: 0 }}>
+                <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
                   <SettingsView session={session} />
                 </motion.div>
               )}
