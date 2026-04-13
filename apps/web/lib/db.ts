@@ -126,10 +126,13 @@ export async function rateService(id: string, newRating: number): Promise<DBServ
   if (newRating < 1 || newRating > 5) return null;
 
   if (isSupabaseConfigured && supabase) {
-    // In a real app, we'd use an RPC for atomic updates or a separate ratings table
     const { data: service } = await supabase.from("services").select("*").eq("id", id).single();
     if (!service) return null;
 
+    // ─── REPUTATION SYSTEM (ROLLING AVERAGE) ───
+    // To calculate the new average rating without storing every individual review,
+    // we reverse-engineer the total score (current rating * number of reviews),
+    // add the new rating value, and divide by the updated review count.
     const totalScore = (service.rating * service.rating_count) + newRating;
     const newCount = service.rating_count + 1;
     const updatedRating = totalScore / newCount;
@@ -147,7 +150,7 @@ export async function rateService(id: string, newRating: number): Promise<DBServ
     }
   }
 
-  // In-memory update
+  // In-memory fallback: Recalculate rolling average identically
   const service = memServices.get(id);
   if (!service) return null;
 
