@@ -28,6 +28,38 @@ export async function search(query: string): Promise<{
   const start = Date.now();
   const results: SearchResult[] = [];
 
+// ── 0. Google News RSS (Real-time News) ──────────────────────────────────
+  try {
+    const newsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+    const newsRes = await fetch(newsUrl, {
+      headers: { "User-Agent": UA },
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (newsRes.ok) {
+      const xml = await newsRes.text();
+      // Scrappy but effective XML parsing for a demo
+      const items = xml.split("<item>").slice(1, 6);
+      for (const item of items) {
+        const title = item.match(/<title>(.*?)<\/title>/)?.[1] || "";
+        const link = item.match(/<link>(.*?)<\/link>/)?.[1] || "";
+        const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || "";
+        
+        if (title && link) {
+          results.push({
+            title: title.replace(" - ", " | "),
+            url: link,
+            snippet: `Published on ${pubDate}. Latest news update regarding ${query}.`,
+            relevance: 0.95,
+            source: "Google News",
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[search] Google News fallback error:", err);
+  }
+
   // ── 1. DuckDuckGo Instant Answer ─────────────────────────────────────────
   try {
     const ddgUrl = `${DDG_API}?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
