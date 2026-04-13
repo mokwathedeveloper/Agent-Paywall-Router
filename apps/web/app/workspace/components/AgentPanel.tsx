@@ -6,6 +6,7 @@ import { AgentReasoningPanel } from "./AgentReasoningPanel";
 import { ResultPanel } from "./ResultPanel";
 import { Timeline } from "./Timeline";
 import type { AgentStep } from "@/lib/types";
+import { useAppStore, fetchTransactions } from "@/lib/store";
 
 interface AgentResult {
   txHash: string | null;
@@ -14,11 +15,12 @@ interface AgentResult {
   result: string;
   toolOutputs?: any[];
   steps: AgentStep[];
+  summary?: import("@/lib/types").SpendingSummary;
   proofs: { policyTxHash: string | null; policyAgent: string | null };
   marketplace: {
     servicesDiscovered: number;
-    cheapestService: string;
-    cheapestPriceUsd: number;
+    bestValueService: string;
+    bestValuePriceUsd: number;
     txExplorerLink: string | null;
     policyExplorerLink: string | null;
   } | null;
@@ -31,6 +33,7 @@ const SUGGESTIONS = [
 ];
 
 export function AgentPanel({ sessionId }: { sessionId: string | null }) {
+  const { setSummary, setTransactions } = useAppStore();
   const [prompt, setPrompt] = useState("");
   const [isExecuting, setIsExecuting] = useState(false);
   const [steps, setSteps] = useState<AgentStep[]>([]);
@@ -59,10 +62,10 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
         body: JSON.stringify({ prompt: input, sessionId }),
       });
 
-      const data = await res.json();
+      const data = await res.json() as AgentResult;
 
       if (!res.ok) {
-        setError(data.detail || data.error || "Agent execution failed");
+        setError((data as any).detail || (data as any).error || "Agent execution failed");
         if (data.steps) setSteps(data.steps);
         return;
       }
@@ -74,12 +77,20 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
       }
 
       setResult(data);
+
+      // ─── Sync with Global Store ───
+      if (data.summary) {
+        setSummary(data.summary);
+      }
+      const txData = await fetchTransactions(sessionId);
+      setTransactions(txData.transactions);
+
     } catch (err) {
       setError(String(err));
     } finally {
       setIsExecuting(false);
     }
-  }, [sessionId, isExecuting]);
+  }, [sessionId, isExecuting, setSummary, setTransactions]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
