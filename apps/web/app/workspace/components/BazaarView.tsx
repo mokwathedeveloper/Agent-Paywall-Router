@@ -72,25 +72,30 @@ export function BazaarView({ catalog }: Props) {
       }
     }
   });
+const handleRate = async (id: string, rating: number) => {
+  const txHash = prompt("Please enter the Stellar Transaction Hash of your payment to verify your review:");
+  if (!txHash) return;
 
-  const handleRate = async (id: string, rating: number) => {
-    try {
-      const res = await fetch("/api/services/rate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, rating })
-      });
-      if (res.ok) {
-        alert("Thanks for rating!");
-        const updatedServicesRes = await fetch("/api/services");
-        const data = await updatedServicesRes.json();
-        setServices(data.services ?? []);
-        setBestValueId(data.bestValue?.id ?? null);
-      }
-    } catch (err) {
-      console.error(err);
+  try {
+    const res = await fetch("/api/services/rate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, rating, txHash })
+    });
+    if (res.ok) {
+      alert("Verification successful! Thanks for rating.");
+      const updatedServicesRes = await fetch("/api/services");
+      const data = await updatedServicesRes.json();
+      setServices(data.services ?? []);
+      setBestValueId(data.bestValue?.id ?? null);
+    } else {
+      const error = await res.json();
+      alert(`Verification failed: ${error.error}`);
     }
-  };
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to remove this service?")) return;
