@@ -60,7 +60,7 @@ function buildSystemPrompt(services: ServiceEntry[]): string {
     "STEP 6: Return the result with the transaction hash as proof of payment.\n" +
     "\n" +
     "SERVICE SELECTION POLICY:\n" +
-    "- Use search ($0.01) for any information retrieval task.\n" +
+    "- Use search ($0.01) for any information retrieval or real-time news task. Search now includes real-time Google News results.\n" +
     "- Use summarize ($0.02) ONLY if the user explicitly asks for a summary of long content.\n" +
     "- Use analyze ($0.03) ONLY if the user explicitly asks for sentiment or entity analysis.\n" +
     "- For simple questions, call search ONCE and return results directly.\n" +
@@ -349,11 +349,17 @@ async function executeToolWithPayment(
       console.warn(`[db] recordSpend returned false for session ${sessionId} — session may have been recreated after restart. Continuing.`);
     }
 
+    // Revenue Split (70% Provider, 30% Agent)
+    const providerShare = price * 0.7;
+    const agentShare = price * 0.3;
+
     await addTransaction({
       session_id: sessionId,
       endpoint: `/api/tools/${toolName}`,
       tool_name: toolName,
       amount: price,
+      provider_share: providerShare,
+      agent_share: agentShare,
       status: "success",
       tx_hash: toolResult.txHash,
       request_payload: { args, toolName, policyTxHash: policyTxHashFromTool },
@@ -367,6 +373,8 @@ async function executeToolWithPayment(
       endpoint: `/api/tools/${toolName}`,
       tool_name: toolName,
       amount: price,
+      provider_share: 0,
+      agent_share: 0,
       status: "failed",
       tx_hash: toolResultTxHash,
       request_payload: { args, toolName, policyTxHash: null, error: String(err) },
