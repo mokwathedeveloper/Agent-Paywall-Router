@@ -66,8 +66,13 @@ export default function WorkspacePage() {
           const res = await fetch(`/api/sessions?id=${storedId}`);
           if (res.ok) {
             const existing = await res.json();
-            if (!cancelled && existing?.id) {
-              // Strip the nested summary before setting session
+            // Validate session is still usable: not expired, has remaining budget
+            const isExpired = existing?.expires_at && new Date(existing.expires_at) < new Date();
+            const hasNoBudget = existing?.spending_limit != null &&
+              existing?.used_amount != null &&
+              existing.used_amount >= existing.spending_limit;
+
+            if (!cancelled && existing?.id && !isExpired && !hasNoBudget) {
               const { summary: existingSummary, ...sessionData } = existing;
               setSession(sessionData);
               if (existingSummary) {
@@ -90,8 +95,9 @@ export default function WorkspacePage() {
           }
         } catch {
           // stored session gone — fall through to create new
-          localStorage.removeItem("agentpay_session_id");
         }
+        // Session expired, exhausted, or invalid — clear it and create fresh
+        localStorage.removeItem("agentpay_session_id");
       }
 
       const s = await createSessionAPI(5.0);
