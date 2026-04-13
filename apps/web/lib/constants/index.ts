@@ -22,21 +22,23 @@ export const STELLAR_NETWORK = "stellar:testnet";
 
 // ─── Tool Pricing (USD) ──────────────────────────────────────────────────────
 
-export const TOOL_PRICES = {
+export const TOOL_PRICES: Record<string, number> = {
   search: 0.01,
   summarize: 0.02,
   analyze: 0.03,
-} as const;
+  weather: 0.05,
+};
 
 /**
  * Tool prices in USDC token units (7 decimal places).
- * $0.01 = 100_000 stroops, $0.02 = 200_000, $0.03 = 300_000
+ * $0.01 = 100_000 stroops, $0.02 = 200_000, $0.03 = 300_000, $0.05 = 500_000
  */
-export const TOOL_PRICES_TOKEN_UNITS = {
+export const TOOL_PRICES_TOKEN_UNITS: Record<string, string> = {
   search: "100000",
   summarize: "200000",
   analyze: "300000",
-} as const;
+  weather: "500000",
+};
 
 // ─── Session Defaults ────────────────────────────────────────────────────────
 
