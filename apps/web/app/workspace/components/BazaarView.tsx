@@ -92,6 +92,22 @@ export function BazaarView({ catalog }: Props) {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to remove this service?")) return;
+    try {
+      const res = await fetch(`/api/services?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (res.ok) {
+        setServices(services.filter(s => s.id !== id));
+        if (bestValueId === id) setBestValueId(null);
+      } else {
+        const error = await res.json();
+        alert(error.error || "Failed to delete");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-deep)", position: "relative", overflow: "hidden" }}>
       {/* Sticky Header */}
@@ -125,6 +141,8 @@ export function BazaarView({ catalog }: Props) {
             }).map((tool: any) => {
               const isMpp = tool.payment?.protocol === "mpp";
               const bgColor = isMpp ? "var(--indigo-dim)" : tool.id === "analyze" ? "var(--amber-dim)" : "var(--emerald-dim)";
+              const isDefault = ["search", "summarize", "analyze", "weather"].includes(tool.id);
+
               return (
                 <motion.div key={tool.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="card" style={{ display: "flex", flexDirection: "column", gap: "var(--s4)", cursor: "default" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
@@ -132,7 +150,7 @@ export function BazaarView({ catalog }: Props) {
                       <ToolIcon id={tool.id} isMpp={isMpp} />
                     </div>
                     <div style={{ display: "flex", gap: "var(--s2)", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                      {bestValueId === tool.id && <div style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: "var(--r-full)", background: "var(--emerald-dim)", border: "1px solid rgba(16,185,129,0.3)", fontSize: "0.5625rem", fontWeight: 700, color: "var(--emerald)", letterSpacing: "0.04em" }}><Trophy size={9} /> BEST VALUE</div>}
+                      {bestValueId === tool.id && <div title="Optimal score based on Cost * (1 - Rating/5)" style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: "var(--r-full)", background: "var(--emerald-dim)", border: "1px solid rgba(16,185,129,0.3)", fontSize: "0.5625rem", fontWeight: 700, color: "var(--emerald)", letterSpacing: "0.04em", cursor: "help" }}><Trophy size={9} /> BEST VALUE</div>}
                       <div className="badge badge-neutral" style={{ fontSize: "0.6875rem" }}>{isMpp ? "MPP" : "x402"}</div>
                     </div>
                   </div>
@@ -140,7 +158,7 @@ export function BazaarView({ catalog }: Props) {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--s1)" }}>
                       <h3 className="h3" style={{ fontSize: "1.125rem", margin: 0 }}>{tool.name}</h3>
                       {tool.rating !== undefined && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.75rem", fontWeight: 600 }}>
+                        <div title={`Rated ${tool.rating.toFixed(1)} stars from ${tool.ratingCount} reviews`} style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.75rem", fontWeight: 600, cursor: "help" }}>
                           <Star size={12} fill="currentColor" />
                           <span>{tool.rating.toFixed(1)}</span>
                           <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>({tool.ratingCount})</span>
@@ -154,12 +172,17 @@ export function BazaarView({ catalog }: Props) {
                       <div className="caption" style={{ fontSize: "0.625rem" }}>Price</div>
                       <div className="cost" style={{ fontSize: "1.125rem" }}>${tool.priceUsd.toFixed(2)}</div>
                     </div>
-                    <div style={{ display: "flex", gap: "var(--s2)" }}>
+                    <div style={{ display: "flex", gap: "var(--s2)", alignItems: "center" }}>
                       <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "6px 12px" }} onClick={() => {
                         const r = prompt("Rate this service (1-5):");
                         if (r && parseInt(r) >= 1 && parseInt(r) <= 5) handleRate(tool.id, parseInt(r, 10));
                       }}>Rate</button>
                       <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "6px 12px" }} onClick={() => setSpecTool(tool)}>View Spec</button>
+                      {!isDefault && (
+                        <button title="Remove Service" className="btn btn-ghost" style={{ padding: "6px", color: "var(--rose)" }} onClick={() => handleDelete(tool.id)}>
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -169,7 +192,7 @@ export function BazaarView({ catalog }: Props) {
         </div>
 
         {/* Discovery Info Box */}
-        <div style={{ padding: "var(--s6)", background: "var(--bg-surface)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-xl)", display: "flex", alignItems: "center", gap: "var(--s6)" }}>
+        <div title="Score = Price * (1 - Rating / 5)" style={{ cursor: "help", padding: "var(--s6)", background: "var(--bg-surface)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-xl)", display: "flex", alignItems: "center", gap: "var(--s6)" }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--emerald-dim)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Shield size={24} color="var(--emerald)" /></div>
           <div>
             <h4 style={{ fontWeight: 600, marginBottom: 4 }}>Deterministic Discovery Active</h4>
