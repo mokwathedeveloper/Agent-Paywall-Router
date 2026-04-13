@@ -520,14 +520,14 @@ A: The global weather API was integrated as a "High-Value API" to demonstrate th
 
 ---
 
-## Future Roadmap
+## Remaining Work/TO-DOs
 
-While the Agent Paywall Router is fully functional on the Stellar Testnet with persistent database support, the following enhancements are planned for production-grade scaling:
+While the Agent Paywall Router is fully functional on the Stellar Testnet with persistent database support, the following enhancements are required for a true production-grade deployment. Some current features rely on off-chain calculation or lack strict Sybil resistance:
 
-- **On-Chain Revenue Splitting**: Currently, revenue splits are calculated and recorded at the application layer for performance. Future iterations will utilize a Soroban `PaymentSplitter` contract for immutable, on-chain distribution.
-- **Provider Authentication**: Integration with Stellar Wallet Connect to cryptographically verify service ownership during registration.
-- **Advanced Reputation Security**: Implementing a "Verified Purchaser" gate for the rating system, requiring an on-chain transaction hash to validate reviews.
-- **Multi-Asset Support**: Expanding beyond USDC to support any Soroban-compliant token on Stellar.
+- **TODO: On-Chain Revenue Splitting**: Currently, revenue splits (e.g., 70% to Provider, 30% to Protocol) are calculated and recorded at the application layer (`apps/web/app/api/agent/route.ts`) for performance during the demo. Future iterations must utilize the Soroban `PaymentSplitter` logic (demonstrated in `contracts/spending-policy/src/lib.rs`) for immutable, on-chain distribution.
+- **TODO: Provider Authentication**: Integration with Stellar Wallet Connect to cryptographically verify service ownership during registration. Currently, anyone can register a service via the Bazaar UI without proving they own the endpoint.
+- **TODO: Advanced Reputation Security**: The 1-5 star rating system currently allows any user to rate a service. A production version must implement a "Verified Purchaser" gate, requiring an on-chain transaction hash to validate that the rater actually paid for and used the service.
+- **TODO: Multi-Asset Support**: The system is currently hardcoded to use testnet USDC. Expanding beyond USDC to support any Soroban-compliant token on Stellar would increase the marketplace's flexibility.
 
 ---
 
