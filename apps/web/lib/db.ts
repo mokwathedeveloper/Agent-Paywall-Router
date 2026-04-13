@@ -2,8 +2,8 @@
  * Database abstraction layer.
  * Uses Supabase when configured, falls back to in-memory for local dev.
  */
-import { supabase, isSupabaseConfigured, type DBSession, type DBTransaction } from "./supabase";
-import { DEFAULT_SPENDING_LIMIT, SESSION_TTL_MS } from "./constants";
+import { supabase, isSupabaseConfigured, type DBSession, type DBTransaction, type DBService } from "./supabase";
+import { DEFAULT_SPENDING_LIMIT, SESSION_TTL_MS, TOOL_PRICES, SPENDING_POLICY_CONTRACT_ID } from "./constants";
 
 // ─── In-memory fallback ───
 // WARNING: In-memory storage resets on every server restart.
@@ -16,10 +16,79 @@ if (!isSupabaseConfigured && process.env.NODE_ENV === "production") {
 }
 const memSessions = new Map<string, DBSession>();
 const memTransactions: DBTransaction[] = [];
+const memServices = new Map<string, DBService>();
 const sessionLocks = new Map<string, Promise<void>>();
 
 function genId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// ─── Services ───
+
+const DEFAULT_SERVICES: DBService[] = [
+  {
+    id: "search",
+    name: "Web Search",
+    description: "Real-time web search via DuckDuckGo + Wikipedia. Use for unknown facts, news, current events.",
+    price_usd: TOOL_PRICES.search,
+    protocol: "x402",
+    endpoint: "/api/tools/search",
+    method: "GET",
+    input_param: "q",
+    stellar_network: "stellar:testnet",
+    spending_policy_contract: SPENDING_POLICY_CONTRACT_ID,
+    is_external: false,
+  },
+  {
+    id: "summarize",
+    name: "Text Summarizer",
+    description: "Extracts key points and summary from long text. Use only after retrieving content that needs condensing.",
+    price_usd: TOOL_PRICES.summarize,
+    protocol: "x402",
+    endpoint: "/api/tools/summarize",
+    method: "POST",
+    input_param: "text",
+    stellar_network: "stellar:testnet",
+    spending_policy_contract: SPENDING_POLICY_CONTRACT_ID,
+    is_external: false,
+  },
+  {
+    id: "analyze",
+    name: "Sentiment Analyzer",
+    description: "Sentiment analysis, entity extraction, theme detection. Use for deeper insight on retrieved content.",
+    price_usd: TOOL_PRICES.analyze,
+    protocol: "x402",
+    endpoint: "/api/tools/analyze",
+    method: "POST",
+    input_param: "text",
+    stellar_network: "stellar:testnet",
+    spending_policy_contract: SPENDING_POLICY_CONTRACT_ID,
+    is_external: false,
+  },
+];
+
+// Initialize default services
+DEFAULT_SERVICES.forEach(s => memServices.set(s.id, s));
+
+export async function getAllServices(): Promise<DBService[]> {
+  if (isSupabaseConfigured && supabase) {
+    const { data } = await supabase.from("services").select("*").order("price_usd", { ascending: true });
+    if (data && data.length > 0) return data as DBService[];
+  }
+  return Array.from(memServices.values()).sort((a, b) => a.price_usd - b.price_usd);
+}
+
+export async function addService(service: Omit<DBService, "id" | "created_at">): Promise<DBService> {
+  const id = genId("svc");
+  const newService: DBService = { ...service, id, created_at: new Date().toISOString() };
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from("services").insert(newService);
+    if (error) console.error("[db] Supabase insert service error:", error.message);
+  }
+
+  memServices.set(id, newService);
+  return newService;
 }
 
 // ─── Sessions ───
@@ -120,6 +189,13 @@ async function withSessionLock<T>(sessionId: string, fn: () => Promise<T>): Prom
 export async function recordSpend(sessionId: string, amount: number): Promise<boolean> {
   // Atomic "consume budget" - fail closed if insufficient budget.
   const now = new Date();
+
+  // HARD LIMIT CHECK
+  const sessionForCheck = await getSession(sessionId);
+  if (!sessionForCheck) throw new Error("Session not found");
+  if (sessionForCheck.used_amount + amount > sessionForCheck.spending_limit) {
+    throw new Error(`Budget exceeded: ${sessionForCheck.used_amount.toFixed(2)} + ${amount.toFixed(2)} > ${sessionForCheck.spending_limit.toFixed(2)}`);
+  }
 
   if (isSupabaseConfigured && supabase) {
     // Try the RPC first (atomic increment)
