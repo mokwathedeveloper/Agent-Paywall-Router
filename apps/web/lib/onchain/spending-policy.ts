@@ -159,6 +159,102 @@ export async function authorizeSpendingPolicyForPayer(toolName: ToolName, payerA
   };
 }
 
+export async function authorizeSplitSpendingPolicy(
+  toolName: ToolName,
+  payerAddress: string,
+  providerAddress: string,
+  providerPercentage: number
+) {
+  if (!process.env.STELLAR_PRIVATE_KEY) {
+    throw new Error("Missing STELLAR_PRIVATE_KEY for SpendingPolicy authorization.");
+  }
+
+  const amountTokenUnits = TOOL_PRICES_TOKEN_UNITS[toolName];
+
+  const {
+    Keypair,
+    Contract,
+    TransactionBuilder,
+    Horizon,
+    rpc,
+    Networks,
+    BASE_FEE,
+    nativeToScVal,
+  } = await import("@stellar/stellar-sdk");
+
+  const adminKeypair = Keypair.fromSecret(process.env.STELLAR_PRIVATE_KEY);
+  const adminAddress = adminKeypair.publicKey();
+
+  const horizon = new Horizon.Server("https://horizon-testnet.stellar.org");
+  const account = await horizon.loadAccount(adminAddress);
+
+  const contract = new Contract(SPENDING_POLICY_CONTRACT_ID);
+
+  // Scaled percentage for Soroban (e.g., 0.7 -> 70)
+  const scaledPercentage = Math.round(providerPercentage * 100);
+
+  // Step 1: Build the unsigned transaction calling record_split_payment
+  const unsignedTx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(
+      contract.call(
+        "record_split_payment",
+        nativeToScVal(payerAddress, { type: "address" }),
+        nativeToScVal(providerAddress, { type: "address" }),
+        nativeToScVal(amountTokenUnits, { type: "i128" }),
+        nativeToScVal(scaledPercentage, { type: "u32" })
+      )
+    )
+    .setTimeout(30)
+    .build();
+
+  // Step 2: Simulate
+  const rpcServer = new rpc.Server("https://soroban-testnet.stellar.org", { timeout: 20000 });
+  let sim: Awaited<ReturnType<typeof rpcServer.simulateTransaction>>;
+  let lastSimError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      sim = await rpcServer.simulateTransaction(unsignedTx);
+      lastSimError = undefined;
+      break;
+    } catch (e) {
+      lastSimError = e;
+      if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+    }
+  }
+  if (lastSimError !== undefined) throw lastSimError;
+  sim = sim!;
+
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    const simErr = sim as unknown as { error?: string; result?: unknown };
+    const details = simErr?.error ?? JSON.stringify(simErr?.result ?? sim);
+    throw new Error(`SpendingPolicy.record_split_payment() simulation failed: ${String(details)}`);
+  }
+
+  // Step 3: Assemble
+  const assembledTx = (rpc.assembleTransaction(unsignedTx, sim) as any).build();
+
+  // Step 4: Sign
+  assembledTx.sign(adminKeypair);
+
+  // Step 5: Submit
+  const res = await horizon.submitTransaction(assembledTx);
+  if (!res.successful) {
+    const resErr = res as unknown as { resultXdr?: string; resultMeta?: string };
+    const details = resErr?.resultXdr ?? resErr?.resultMeta ?? JSON.stringify(res);
+    throw new Error(`SpendingPolicy.record_split_payment() transaction failed: ${String(details)}`);
+  }
+
+  console.log(`[Stellar/Soroban] On-Chain Split Recorded: ${res.hash}`);
+
+  return {
+    policyTxHash: res.hash,
+    policyAgent: payerAddress,
+  };
+}
+
 export async function decodeX402PaymentTxHashFromHeaders(headers: Record<string, string>) {
   const paymentResponse =
     headers["PAYMENT-RESPONSE"] ?? headers["X-PAYMENT-RESPONSE"] ?? headers["payment-response"];
