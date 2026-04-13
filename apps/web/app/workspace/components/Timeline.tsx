@@ -123,21 +123,7 @@ export function Timeline({ steps }: Props) {
       </AnimatePresence>
 
       {isDone && (
-        <motion.div
-          initial={{ opacity: 0, y: 12, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.4, ease }}
-          style={{
-            marginTop: "var(--s6)", padding: "var(--s4) var(--s5)",
-            background: "var(--emerald-dim)", border: "1px solid rgba(16,185,129,0.3)",
-            borderRadius: "var(--r-xl)", display: "flex", alignItems: "center", gap: "var(--s3)",
-          }}
-        >
-          <CheckCircle2 size={18} color="var(--emerald)" style={{ flexShrink: 0 }} />
-          <span style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--emerald)" }}>
-            Payment successful — result below
-          </span>
-        </motion.div>
+        <div style={{ height: "var(--s4)" }} />
       )}
 
       {hasFailed && !isDone && (
