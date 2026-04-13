@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, FileText, BarChart3, Zap, ArrowLeft, Wallet,
@@ -50,8 +50,16 @@ export default function WorkspacePage() {
   } | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
+
+  // Auto-scroll timeline
+  useEffect(() => {
+    if (timelineRef.current) {
+      timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
+    }
+  }, [steps, lastResult, isExecuting]);
 
   // Initialize session — reuse persisted session or create new one
   useEffect(() => {
@@ -205,9 +213,7 @@ export default function WorkspacePage() {
                       sessionReady={!!session}
                     />
                   </div>
-                  <div className="timeline-area" ref={(el) => {
-                    if (el && lastResult) el.scrollTop = el.scrollHeight;
-                  }}>
+                  <div className="timeline-area" ref={timelineRef}>
                     {steps.length === 0 && !isExecuting ? (
                       <EmptyState onSuggestion={handleExecute} />
                     ) : steps.length === 0 && isExecuting ? (
@@ -223,7 +229,8 @@ export default function WorkspacePage() {
                         <Timeline steps={steps} />
                       </>
                     )}
-                    {lastResult !== null && !isExecuting && <ResultPanel result={lastResult} />}
+                    {lastResult !== null && <ResultPanel result={lastResult} />}
+                    <div style={{ minHeight: "var(--s12)", flexShrink: 0 }} />
                   </div>
                 </motion.div>
               )}
