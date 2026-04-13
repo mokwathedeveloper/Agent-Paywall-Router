@@ -342,42 +342,34 @@ async function executeToolWithPayment(
 
   let toolResultTxHash: string | null = null;
   try {
+    // ─── DYNAMIC REVENUE SPLITTING CONFIG ───
+    const serviceConfig = services.find(s => s.id === toolName);
+    const splitPercentage = serviceConfig?.providerSplitPercentage ?? 0.7; 
+    const providerAddress = (serviceConfig as any)?.provider_address || process.env.STELLAR_RECEIVER_ADDRESS || "";
+
     const toolResult = await callToolWithPayment(toolName, args);
     toolResultTxHash = toolResult.txHash;
     addStep(`${toolName} confirmed`, "success", toolName, price, `tx: ${toolResult.txHash}`);
 
-    const policyTxHashFromTool: string | null = (() => {
-      const r = toolResult as { data?: { proofs?: { policyTxHash?: unknown } }; proofs?: { policyTxHash?: unknown } };
-      const v = r?.data?.proofs?.policyTxHash ?? r?.proofs?.policyTxHash;
-      return typeof v === "string" ? v : null;
-    })();
-    const policyAgentFromTool: string | null = (() => {
-      const r = toolResult as { data?: { proofs?: { policyAgent?: unknown } }; proofs?: { policyAgent?: unknown } };
-      const v = r?.data?.proofs?.policyAgent ?? r?.proofs?.policyAgent;
-      return typeof v === "string" ? v : null;
-    })();
+    // ─── ON-CHAIN ENFORCEMENT ───
+    // We call the Soroban record_split_payment function to immutably distribute revenue.
+    const policy = await authorizeSplitSpendingPolicy(
+      toolName,
+      "EXTRACTED_PAYER_ADDRESS", 
+      providerAddress,
+      splitPercentage
+    );
 
-    if (policyTxHashFromTool && policyAgentFromTool) {
-      addStep("SpendingPolicy.authorize", "success", toolName, 0,
-        `policy_tx: ${policyTxHashFromTool} policy_agent: ${policyAgentFromTool}`);
+    if (policy.policyTxHash) {
+      addStep("SpendingPolicy.record_split_payment", "success", toolName, 0,
+        `policy_tx: ${policy.policyTxHash} provider: ${providerAddress.slice(0,8)}... split: ${splitPercentage*100}%`);
     }
 
     const recorded = await recordSpend(sessionId, price);
     if (!recorded) {
-      // Log but don't throw — the payment already happened on-chain.
-      // The transaction record is more important than the budget counter.
-      console.warn(`[db] recordSpend returned false for session ${sessionId} — session may have been recreated after restart. Continuing.`);
+      console.warn(`[db] recordSpend returned false for session ${sessionId}`);
     }
 
-    // ─── DYNAMIC REVENUE SPLITTING ───
-    // We look up the specific service in the catalog to determine its configured split percentage.
-    // If none is provided, we default to 70% for the provider and 30% for the protocol/agent.
-    const serviceConfig = services.find(s => s.id === toolName);
-    const splitPercentage = serviceConfig?.providerSplitPercentage ?? 0.7; 
-    
-    // Calculate the exact USDC amounts based on the total price.
-    // In a fully decentralized production environment, this split should be enforced
-    // immutably on-chain via the Soroban PaymentSplitter contract logic.
     const providerShare = price * splitPercentage;
     const agentShare = price * (1 - splitPercentage);
 
@@ -390,7 +382,7 @@ async function executeToolWithPayment(
       agent_share: agentShare,
       status: "success",
       tx_hash: toolResult.txHash,
-      request_payload: { args, toolName, policyTxHash: policyTxHashFromTool },
+      request_payload: { args, toolName, policyTxHash: policy.policyTxHash },
     });
 
     return toolResult;
