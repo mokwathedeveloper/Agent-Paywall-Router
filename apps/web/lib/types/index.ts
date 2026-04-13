@@ -7,7 +7,7 @@
 
 export type PaymentStatus = "pending" | "success" | "failed";
 
-export type ToolName = "search" | "summarize" | "analyze";
+export type ToolName = "search" | "summarize" | "analyze" | "weather";
 
 export type AgentStepStatus =
   | "pending"
@@ -39,6 +39,9 @@ export interface DBService {
   stellar_network: string;
   spending_policy_contract: string;
   is_external: boolean;
+  rating: number; // Added for reputation system
+  rating_count: number; // Added for reputation system
+  provider_split_percentage: number; // Configurable split
   created_at?: string;
 }
 
