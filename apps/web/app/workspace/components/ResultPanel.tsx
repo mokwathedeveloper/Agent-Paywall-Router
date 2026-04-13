@@ -154,10 +154,25 @@ function AnalyzeOutput({ data }: { data: ToolData }) {
   );
 }
 
+function RawOutput({ data }: { data: any }) {
+  return (
+    <pre style={{
+      padding: "var(--s4)", background: "var(--bg-deep)",
+      borderRadius: "var(--r-lg)", border: "1px solid var(--border-dim)",
+      fontSize: "0.8125rem", color: "var(--text-body)", fontFamily: "var(--font-mono)",
+      whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0,
+    }}>
+      {JSON.stringify(data, null, 2)}
+    </pre>
+  );
+}
+
 function ToolSection({ output }: { output: ToolOutput }) {
   const Icon = TOOL_ICONS[output.tool] ?? Search;
   const color = TOOL_COLORS[output.tool] ?? "var(--text-muted)";
   const data = output.result as ToolData;
+
+  const isKnown = ["search", "summarize", "analyze"].includes(output.tool);
 
   return (
     <div style={{ marginBottom: "var(--s6)" }}>
@@ -175,6 +190,7 @@ function ToolSection({ output }: { output: ToolOutput }) {
       {output.tool === "search" && <SearchOutput data={data} />}
       {output.tool === "summarize" && <SummarizeOutput data={data} />}
       {output.tool === "analyze" && <AnalyzeOutput data={data} />}
+      {!isKnown && <RawOutput data={data} />}
     </div>
   );
 }
@@ -183,13 +199,19 @@ export function ResultPanel({ result }: { result: unknown }) {
   const [copied, setCopied] = useState(false);
 
   // Normalise into { text, toolOutputs }
-  const payload: ResultPayload =
-    typeof result === "object" && result !== null && "text" in result
-      ? (result as ResultPayload)
-      : { text: String(result ?? ""), toolOutputs: [] };
+  const payload: ResultPayload = (() => {
+    if (typeof result === "object" && result !== null) {
+      const r = result as any;
+      return {
+        text: typeof r.text === "string" ? r.text : "",
+        toolOutputs: Array.isArray(r.toolOutputs) ? r.toolOutputs : [],
+      };
+    }
+    return { text: String(result ?? ""), toolOutputs: [] };
+  })();
 
-  const hasToolOutputs = Array.isArray(payload.toolOutputs) && payload.toolOutputs.length > 0;
-  const hasText = typeof payload.text === "string" && payload.text.trim().length > 0;
+  const hasToolOutputs = payload.toolOutputs.length > 0;
+  const hasText = payload.text.trim().length > 0;
   const hasContent = hasToolOutputs || hasText;
 
   const handleCopy = () => {
@@ -205,63 +227,72 @@ export function ResultPanel({ result }: { result: unknown }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease }}
+      initial={{ opacity: 0, scale: 0.98, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ duration: 0.5, ease }}
       style={{
         background: "var(--bg-surface)",
-        border: `1px solid ${hasContent ? "var(--border-glow)" : "var(--border-dim)"}`,
-        borderRadius: "var(--r-xl)",
+        border: "2px solid var(--emerald)",
+        borderRadius: "var(--r-2xl)",
         overflow: "hidden",
+        boxShadow: "0 24px 48px -12px rgba(16,185,129,0.25)",
+        marginTop: "var(--s4)",
       }}
     >
       {/* Header — message changes based on whether result exists */}
       <div style={{
-        padding: "var(--s4) var(--s5)", borderBottom: "1px solid var(--border-dim)",
-        background: "var(--bg-card)", display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "var(--s5) var(--s6)", borderBottom: "1px solid var(--border-dim)",
+        background: "linear-gradient(90deg, var(--emerald-dim) 0%, var(--bg-card) 100%)", 
+        display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
-          {hasContent
-            ? <CheckCircle2 size={14} color="var(--emerald)" />
-            : <AlertCircle size={14} color="var(--amber)" />
-          }
-          <span style={{
-            fontSize: "0.8125rem", fontWeight: 600,
-            color: hasContent ? "var(--emerald)" : "var(--amber)",
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--s3)" }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: "50%", background: "var(--emerald)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 0 12px var(--emerald)",
           }}>
-            {hasContent
-              ? "Payment successful. Result:"
-              : "Payment successful. No result was returned."
-            }
-          </span>
+            <CheckCircle2 size={18} color="#fff" />
+          </div>
+          <div>
+            <div style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--emerald)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Insights Unlocked
+            </div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              Payment settled · All proofs verified
+            </div>
+          </div>
         </div>
         {hasContent && (
           <button
             onClick={handleCopy}
-            className="btn btn-ghost"
-            style={{ fontSize: "0.75rem", padding: "4px var(--s3)", gap: "var(--s1)" }}
+            className="btn btn-secondary"
+            style={{ fontSize: "0.75rem", padding: "6px var(--s4)", gap: "var(--s2)" }}
           >
-            <Copy size={12} />{copied ? "Copied" : "Copy"}
+            <Copy size={14} />{copied ? "Copied" : "Copy Result"}
           </button>
         )}
       </div>
 
-      <div style={{ padding: "var(--s5)" }}>
+      <div style={{ padding: "var(--s8)" }}>
         {/* Case 1: has structured tool outputs */}
-        {hasToolOutputs && payload.toolOutputs.map((o, i) => (
-          <ToolSection key={`${o.tool}-${i}`} output={o} />
-        ))}
+        {hasToolOutputs && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--s8)" }}>
+            {payload.toolOutputs.map((o, i) => (
+              <ToolSection key={`${o.tool}-${i}`} output={o} />
+            ))}
+          </div>
+        )}
 
         {/* Case 2: has LLM text */}
         {hasText && (
           <div style={hasToolOutputs ? {
-            marginTop: "var(--s2)", paddingTop: "var(--s4)",
+            marginTop: "var(--s6)", paddingTop: "var(--s8)",
             borderTop: "1px solid var(--border-dim)",
           } : {}}>
             {hasToolOutputs && (
-              <div className="caption" style={{ marginBottom: "var(--s3)" }}>Agent Summary</div>
+              <div className="caption" style={{ marginBottom: "var(--s4)", fontSize: "0.75rem" }}>Agent Final Report</div>
             )}
-            <p className="body" style={{ margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.7 }}>
+            <p className="body-lg" style={{ margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.8, color: "var(--text)" }}>
               {payload.text}
             </p>
           </div>
@@ -270,10 +301,14 @@ export function ResultPanel({ result }: { result: unknown }) {
         {/* Case 3: no content at all */}
         {!hasContent && (
           <div style={{
-            padding: "var(--s5)", textAlign: "center",
-            color: "var(--text-muted)", fontSize: "0.875rem",
+            padding: "var(--s10)", textAlign: "center",
+            color: "var(--text-muted)",
           }}>
-            Request completed successfully, but no data was returned.
+            <AlertCircle size={32} color="var(--amber)" style={{ margin: "0 auto var(--s4)" }} />
+            <div style={{ fontWeight: 600, fontSize: "1.125rem", color: "var(--text)" }}>No Data Returned</div>
+            <p className="body" style={{ marginTop: "var(--s2)" }}>
+              The agent completed the task and payment, but the service returned an empty response.
+            </p>
           </div>
         )}
       </div>
