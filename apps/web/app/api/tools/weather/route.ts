@@ -9,7 +9,7 @@ import { getWeather } from "@/lib/services/weather";
 import { verifyPaidOrReturn402 } from "@/lib/paywall/x402";
 import { isSecurityViolationError, requireSafeInput } from "@/lib/services/security";
 import {
-  authorizeSpendingPolicyForVerifiedPayment,
+  authorizeSplitSpendingPolicyForVerifiedPayment,
   paidX402EarlyResponse,
   settlePaidToolJsonWithProofs,
 } from "@/lib/paywall/paid-x402-tool";
@@ -39,7 +39,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     throw err;
   }
 
-  const policy = await authorizeSpendingPolicyForVerifiedPayment(vr.paymentPayload, "weather");
+  // ─── ON-CHAIN REVENUE SPLITTING ───
+  const providerAddress = process.env.STELLAR_RECEIVER_ADDRESS || "";
+  const policy = await authorizeSplitSpendingPolicyForVerifiedPayment(
+    vr.paymentPayload, 
+    "weather", 
+    providerAddress, 
+    0.8 // 80% to provider
+  );
   if (policy instanceof NextResponse) return policy;
 
   const result = await getWeather(location);
