@@ -282,72 +282,120 @@ function Sidebar({
   sidebarOpen: boolean;
 }) {
   const navItems = [
-    { id: "workspace", icon: LayoutDashboard, label: "Workspace" },
+    { id: "workspace", icon: LayoutDashboard, label: "Execution" },
     { id: "demo", icon: Zap, label: "Live Demo" },
-    { id: "bazaar", icon: Search, label: "Bazaar" },
-    { id: "payments", icon: CreditCard, label: "Payments" },
-    { id: "settings", icon: Settings, label: "Settings" },
+    { id: "bazaar", icon: Search, label: "Tool Bazaar" },
+    { id: "payments", icon: CreditCard, label: "Payment Ledger" },
+    { id: "settings", icon: Settings, label: "Configuration" },
   ];
 
   return (
-    <aside className={`workspace-sidebar${sidebarOpen ? " open" : ""}`}>
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--s3)", padding: "var(--s3)", marginBottom: "var(--s6)" }}>
+    <aside className={`workspace-sidebar${sidebarOpen ? " open" : ""}`} style={{
+      background: "var(--bg-surface)",
+      borderRight: "1px solid var(--border-dim)",
+      display: "flex",
+      flexDirection: "column",
+      gap: "var(--s8)"
+    }}>
+      {/* Brand Section */}
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--s3)", padding: "var(--s2) var(--s1)" }}>
         <div style={{
-          width: 32, height: 32, borderRadius: "var(--r-md)", background: "var(--emerald)",
+          width: 36, height: 36, borderRadius: "var(--r-md)", background: "var(--emerald)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "0 2px 8px rgba(16,185,129,0.3)",
+          boxShadow: "0 4px 12px rgba(16,185,129,0.25)",
         }}>
-          <Zap size={16} color="#ffffff" strokeWidth={2.5} />
+          <Zap size={20} color="#ffffff" strokeWidth={2.5} />
         </div>
-        <span style={{ fontWeight: 700, fontSize: "1rem", letterSpacing: "-0.01em" }}>AgentPay</span>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: "1.125rem", letterSpacing: "-0.02em", lineHeight: 1.1 }}>AgentPay</div>
+          <div style={{ fontSize: "0.625rem", fontWeight: 600, color: "var(--emerald)", letterSpacing: "0.05em", marginTop: 2 }}>ROUTER V2</div>
+        </div>
       </div>
 
-      <nav style={{ display: "flex", flexDirection: "column", gap: "var(--s1)", flex: 1 }}>
-        {navItems.map(({ id, icon: Icon, label }) => (
-          <button
-            key={id}
-            onClick={() => setActiveView(id)}
-            style={{
-              display: "flex", alignItems: "center", gap: "var(--s3)",
-              padding: "var(--s3) var(--s4)", borderRadius: "var(--r-md)",
-              fontSize: "0.9375rem", fontWeight: activeView === id ? 500 : 400,
-              color: activeView === id ? "var(--text)" : "var(--text-body)",
-              background: activeView === id ? "var(--bg-hover)" : "transparent",
-              transition: "all var(--normal) var(--ease)", width: "100%", textAlign: "left",
-            }}
-          >
-            <Icon size={18} color={activeView === id ? "var(--emerald)" : "var(--text-muted)"} />
-            {label}
-          </button>
-        ))}
+      {/* Navigation Group */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--s6)" }}>
+        <div className="caption" style={{ fontSize: "0.625rem", paddingLeft: "var(--s4)", color: "var(--text-dim)" }}>MAIN NAVIGATION</div>
+        <nav style={{ display: "flex", flexDirection: "column", gap: "var(--s1)" }}>
+          {navItems.map(({ id, icon: Icon, label }) => {
+            const isActive = activeView === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveView(id)}
+                style={{
+                  display: "flex", alignItems: "center", gap: "var(--s3)",
+                  padding: "var(--s3) var(--s4)", borderRadius: "var(--r-lg)",
+                  fontSize: "0.875rem", fontWeight: isActive ? 600 : 500,
+                  color: isActive ? "var(--text)" : "var(--text-muted)",
+                  background: isActive ? "var(--bg-hover)" : "transparent",
+                  transition: "all 0.2s var(--ease)", width: "100%", textAlign: "left",
+                  position: "relative"
+                }}
+              >
+                {isActive && (
+                  <motion.div layoutId="active-pill" style={{
+                    position: "absolute", left: 0, width: 3, height: 16,
+                    background: "var(--emerald)", borderRadius: "0 4px 4px 0"
+                  }} />
+                )}
+                <Icon size={18} color={isActive ? "var(--emerald)" : "var(--text-dim)"} strokeWidth={isActive ? 2.5 : 2} />
+                {label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Experiment Group */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--s6)" }}>
+        <div className="caption" style={{ fontSize: "0.625rem", paddingLeft: "var(--s4)", color: "var(--text-dim)" }}>ADVANCED</div>
         <Link href="/workspace/a2a" style={{ textDecoration: "none" }}>
           <button style={{
             display: "flex", alignItems: "center", gap: "var(--s3)",
-            padding: "var(--s3) var(--s4)", borderRadius: "var(--r-md)",
-            fontSize: "0.9375rem", fontWeight: 400, color: "var(--text-body)",
-            background: "transparent", transition: "all var(--normal) var(--ease)",
+            padding: "var(--s3) var(--s4)", borderRadius: "var(--r-lg)",
+            fontSize: "0.875rem", fontWeight: 500, color: "var(--text-muted)",
+            background: "transparent", transition: "all 0.2s var(--ease)",
             width: "100%", textAlign: "left",
           }}>
-            <Zap size={18} color="var(--text-muted)" /> A2A Demo
+            <div style={{
+              width: 18, height: 18, borderRadius: "4px", background: "var(--indigo-dim)",
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}>
+              <Zap size={12} color="var(--indigo)" />
+            </div>
+            A2A Payment Flow
           </button>
         </Link>
-      </nav>
-
-      <div style={{
-        padding: "var(--s4)", background: "var(--bg-surface)",
-        border: "1px solid var(--border-dim)", borderRadius: "var(--r-lg)", marginTop: "auto",
-      }}>
-        <div className="caption" style={{ marginBottom: "var(--s2)" }}>Current Session</div>
-        <code style={{ color: "var(--text-body)", fontSize: "0.75rem", wordBreak: "break-all", fontFamily: "var(--font-mono)" }}>
-          {sessionId ?? "Initializing…"}
-        </code>
       </div>
 
-      <WalletConnectSidebar />
+      {/* Footer Utility Section */}
+      <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "var(--s4)" }}>
+        <div style={{
+          padding: "var(--s4)", background: "var(--bg-card)",
+          border: "1px solid var(--border-dim)", borderRadius: "var(--r-xl)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s2)" }}>
+            <span className="caption" style={{ fontSize: "0.5625rem" }}>Active Session</span>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--emerald)", animation: "pulse-dot 2s infinite" }} />
+          </div>
+          <code style={{ 
+            color: "var(--text-body)", fontSize: "0.6875rem", 
+            wordBreak: "break-all", fontFamily: "var(--font-mono)",
+            background: "rgba(0,0,0,0.2)", padding: "4px 8px", borderRadius: "4px", display: "block"
+          }}>
+            {sessionId?.slice(0, 16) ?? "Initializing…"}...
+          </code>
+        </div>
 
-      <Link href="/" className="btn btn-ghost" style={{ marginTop: "var(--s4)", justifyContent: "flex-start", padding: "var(--s2) 0", color: "var(--text-muted)" }}>
-        <ArrowLeft size={14} /> Back to website
-      </Link>
+        <WalletConnectSidebar />
+
+        <Link href="/" className="btn btn-ghost" style={{ 
+          justifyContent: "flex-start", padding: "var(--s2) var(--s1)", 
+          color: "var(--text-dim)", fontSize: "0.75rem", gap: "var(--s2)" 
+        }}>
+          <ArrowLeft size={14} /> Exit Workspace
+        </Link>
+      </div>
     </aside>
   );
 }
