@@ -158,6 +158,23 @@ export async function rateService(id: string, newRating: number): Promise<DBServ
   return service;
 }
 
+export async function deleteService(id: string): Promise<boolean> {
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from("services").delete().eq("id", id);
+    if (error) {
+      console.error("[db] deleteService error:", error.message);
+      return false;
+    }
+  }
+  
+  // Prevent deleting core services
+  const defaultIds = DEFAULT_SERVICES.map(s => s.id);
+  if (defaultIds.includes(id)) return false;
+
+  memServices.delete(id);
+  return true;
+}
+
 // ─── Sessions ───
 
 export async function createSession(limit: number = DEFAULT_SPENDING_LIMIT): Promise<DBSession> {

@@ -50,10 +50,6 @@ impl SpendingPolicy {
     /// Returns the new cumulative spend if authorized.
     /// Panics if the spend would exceed the limit.
     pub fn authorize(env: Env, agent: Address, amount: i128) -> i128 {
-        // Resource servers enforce spend limits based on payment receipts.
-        // The contract tracks cumulative spend per `agent` address, but authorization
-        // itself is restricted to the contract admin to prevent abuse (i.e., locking
-        // another agent's budget without a valid payment flow).
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
 
@@ -80,6 +76,28 @@ impl SpendingPolicy {
         );
 
         new_total
+    }
+
+    /// Record a split payment on-chain, defining the revenue distribution.
+    /// `provider_percentage` is represented as a scaled integer (e.g., 70 for 70%).
+    pub fn record_split_payment(env: Env, agent: Address, provider: Address, amount: i128, provider_percentage: u32) -> (i128, i128) {
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
+
+        // First authorize the total spend
+        Self::authorize(env.clone(), agent.clone(), amount);
+
+        // Calculate splits
+        let provider_share = (amount * provider_percentage as i128) / 100;
+        let agent_share = amount - provider_share;
+
+        // Emit event for the split distribution (PaymentSplitter logic)
+        env.events().publish(
+            (symbol_short!("split"), agent),
+            (provider, provider_share, agent_share),
+        );
+
+        (provider_share, agent_share)
     }
 
     /// Get the current cumulative spend for an agent.
