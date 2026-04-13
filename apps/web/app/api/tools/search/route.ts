@@ -18,7 +18,7 @@ import { search } from "@/lib/services/search";
 import { verifyPaidOrReturn402 } from "@/lib/paywall/x402";
 import { isSecurityViolationError, requireSafeInput } from "@/lib/services/security";
 import {
-  authorizeSpendingPolicyForVerifiedPayment,
+  authorizeSplitSpendingPolicyForVerifiedPayment,
   paidX402EarlyResponse,
   settlePaidToolJsonWithProofs,
 } from "@/lib/paywall/paid-x402-tool";
@@ -44,7 +44,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     throw err;
   }
 
-  const policy = await authorizeSpendingPolicyForVerifiedPayment(vr.paymentPayload, "search");
+  // ─── ON-CHAIN REVENUE SPLITTING ───
+  // We explicitly record the 70/30 split on Stellar via Soroban.
+  // Payer (Agent) -> Provider (Receiver Wallet)
+  const providerAddress = process.env.STELLAR_RECEIVER_ADDRESS || "";
+  const policy = await authorizeSplitSpendingPolicyForVerifiedPayment(
+    vr.paymentPayload, 
+    "search", 
+    providerAddress, 
+    0.7 // 70% to provider
+  );
   if (policy instanceof NextResponse) return policy;
 
   const result = await search(q);
