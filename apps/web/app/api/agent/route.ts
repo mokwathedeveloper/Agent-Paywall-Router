@@ -136,7 +136,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       null,
       0,
       services.length > 0
-        ? `Found ${services.length} services — cheapest: ${services[0]?.id} at $${services[0]?.priceUsd.toFixed(2)}`
+        ? `Found ${services.length} services — best value: ${services[0]?.id} at $${services[0]?.priceUsd.toFixed(2)}`
         : "Using default service catalog"
     );
 
@@ -287,8 +287,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       proofs: { policyTxHash, policyAgent },
       marketplace: {
         servicesDiscovered: services.length,
-        cheapestService: services[0]?.id ?? "search",
-        cheapestPriceUsd: services[0]?.priceUsd ?? 0.01,
+        bestValueService: services[0]?.id ?? "search",
+        bestValuePriceUsd: services[0]?.priceUsd ?? 0.01,
         explorerBase: "https://stellar.expert/explorer/testnet/tx",
         txExplorerLink: resolvedTxHash
           ? `https://stellar.expert/explorer/testnet/tx/${resolvedTxHash.replace("stellar:", "")}`
