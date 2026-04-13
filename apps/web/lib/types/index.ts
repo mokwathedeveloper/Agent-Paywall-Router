@@ -42,6 +42,8 @@ export interface DBService {
   rating: number; // Added for reputation system
   rating_count: number; // Added for reputation system
   provider_split_percentage: number; // Configurable split
+  provider_address: string; // Authentication / Payment target
+  asset_address: string; // Multi-asset support (defaults to USDC)
   created_at?: string;
 }
 
