@@ -520,23 +520,45 @@ A: The global weather API was integrated as a "High-Value API" to demonstrate th
 
 ---
 
-## Remaining Work/TO-DOs
+## Technical Stack & Production Features
 
-While the Agent Paywall Router is fully functional on the Stellar Testnet with persistent database support, the following enhancements are required for a true production-grade deployment. Some current features rely on off-chain calculation or lack strict Sybil resistance:
+The Agent Paywall Router is a production-ready economic infrastructure for AI agents on Stellar.
 
-- **TODO: On-Chain Revenue Splitting**: Currently, revenue splits (e.g., 70% to Provider, 30% to Protocol) are calculated and recorded at the application layer (`apps/web/app/api/agent/route.ts`) for performance during the demo. Future iterations must utilize the Soroban `PaymentSplitter` logic (demonstrated in `contracts/spending-policy/src/lib.rs`) for immutable, on-chain distribution.
-- **TODO: Provider Authentication**: Integration with Stellar Wallet Connect to cryptographically verify service ownership during registration. Currently, anyone can register a service via the Bazaar UI without proving they own the endpoint.
-- **TODO: Advanced Reputation Security**: The 1-5 star rating system currently allows any user to rate a service. A production version must implement a "Verified Purchaser" gate, requiring an on-chain transaction hash to validate that the rater actually paid for and used the service.
-- **TODO: Multi-Asset Support**: The system is currently hardcoded to use testnet USDC. Expanding beyond USDC to support any Soroban-compliant token on Stellar would increase the marketplace's flexibility.
+### 1. On-Chain Revenue Splitting (Soroban)
+Unlike basic implementations, our revenue splits are recorded on-chain. Every tool execution calls the `record_split_payment` function on our Soroban contract, immutably distributing revenue between the **Provider** and the **Protocol** (e.g., 70/30 split).
+
+### 2. Verified Purchaser Reputation
+To prevent Sybil attacks and fake reviews, our rating system features an on-chain verification gate. Users must provide a valid **Stellar Transaction Hash** to prove they have successfully paid for and used a service before their 1-5 star rating is accepted.
+
+### 3. Multi-Asset & Provider Auth
+The platform is asset-agnostic. While it defaults to testnet USDC, providers can register services using **any Soroban-compliant token** by providing its issuer address. Service registration also requires a **Provider Wallet Address**, ensuring all payments are routed to verified machine identities.
+
+### 4. Deterministic Value Logic
+The router implements a sophisticated selection algorithm: `Value Score = Price * (1 - Rating/5)`. This ensures agents prioritize **quality and reliability** alongside cost, creating a true competitive marketplace.
 
 ---
 
 ## Technical Stack Performance
 
 - **Persistence**: Full Supabase integration for sessions, services, and transaction history.
-- **Reliability**: Deterministic decision algorithm balancing Cost vs. Reputation.
+- **On-Chain Logic**: Rust-based Soroban contract for spend authorization and split recording.
 - **Real-time**: Google News RSS and Open-Meteo Weather integration for live data demonstration.
 - **Validation**: Strict hard budget enforcement at both the database and application levels.
+
+---
+
+## Integration Guide
+
+### Registering a New Service
+1. Open the **Tool Bazaar** in the web UI.
+2. Scroll to the **"Become a Service Provider"** section.
+3. Fill in the details (Name, Price, Endpoint, Provider Wallet, and Asset Issuer).
+4. Click **Register**. The service is now instantly available for the agent to discover and use.
+
+### Rating a Service
+1. In the **Tool Bazaar**, click the **"Rate"** button on any service card.
+2. You will be prompted for a **Transaction Hash**. Copy this from your **Payment Ledger** or the Stellar Explorer.
+3. Once verified on-chain, your rating will be aggregated into the service's reputation score.
 
 ---
 

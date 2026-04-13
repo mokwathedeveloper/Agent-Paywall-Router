@@ -98,10 +98,32 @@ const DEFAULT_SERVICES: DBService[] = [
   },
 ];
 
+// Seed memory
 DEFAULT_SERVICES.forEach(s => memServices.set(s.id, s));
+
+/**
+ * Ensures default services exist in Supabase so their ratings can be persisted.
+ */
+async function syncDefaultServices() {
+  if (!isSupabaseConfigured || !supabase) return;
+  
+  for (const service of DEFAULT_SERVICES) {
+    const { data } = await supabase.from("services").select("id").eq("id", service.id).single();
+    if (!data) {
+      console.log(`[db] Seeding default service to Supabase: ${service.id}`);
+      await supabase.from("services").insert(service);
+    }
+  }
+}
+
+let hasSynced = false;
 
 export async function getAllServices(): Promise<DBService[]> {
   if (isSupabaseConfigured && supabase) {
+    if (!hasSynced) {
+      await syncDefaultServices();
+      hasSynced = true;
+    }
     const { data } = await supabase.from("services").select("*").order("price_usd", { ascending: true });
     if (data && data.length > 0) return data as DBService[];
   }
@@ -121,18 +143,22 @@ export async function addService(service: Omit<DBService, "id" | "created_at" | 
 
 export async function rateService(id: string, newRating: number): Promise<DBService | null> {
   if (newRating < 1 || newRating > 5) return null;
+  
+  // Refresh memory/db first to get latest count
   if (isSupabaseConfigured && supabase) {
     const { data: service } = await supabase.from("services").select("*").eq("id", id).single();
-    if (!service) return null;
-    const totalScore = (service.rating * service.rating_count) + newRating;
-    const newCount = service.rating_count + 1;
-    const updatedRating = totalScore / newCount;
-    const { data, error } = await supabase.from("services").update({ rating: updatedRating, rating_count: newCount }).eq("id", id).select().single();
-    if (!error && data) {
-      memServices.set(id, data as DBService);
-      return data as DBService;
+    if (service) {
+      const totalScore = (service.rating * service.rating_count) + newRating;
+      const newCount = service.rating_count + 1;
+      const updatedRating = totalScore / newCount;
+      const { data, error } = await supabase.from("services").update({ rating: updatedRating, rating_count: newCount }).eq("id", id).select().single();
+      if (!error && data) {
+        memServices.set(id, data as DBService);
+        return data as DBService;
+      }
     }
   }
+
   const service = memServices.get(id);
   if (!service) return null;
   service.rating = (service.rating * service.rating_count + newRating) / (service.rating_count + 1);

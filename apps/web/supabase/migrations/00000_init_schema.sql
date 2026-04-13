@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS public.services (
     rating NUMERIC NOT NULL DEFAULT 0.0,
     rating_count INTEGER NOT NULL DEFAULT 0,
     provider_split_percentage NUMERIC NOT NULL DEFAULT 0.7,
+    provider_address TEXT,
+    asset_address TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

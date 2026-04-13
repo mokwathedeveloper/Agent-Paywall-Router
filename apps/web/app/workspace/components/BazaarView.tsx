@@ -18,6 +18,8 @@ interface ServiceEntry {
   rating?: number;
   ratingCount?: number;
   providerSplitPercentage?: number;
+  provider_address?: string;
+  asset_address?: string;
 }
 
 interface Props {
@@ -36,6 +38,9 @@ export function BazaarView({ catalog }: Props) {
   const [specTool, setSpecTool] = useState<Tool | null>(null);
   const [services, setServices] = useState<ServiceEntry[]>([]);
   const [bestValueId, setBestValueId] = useState<string | null>(null);
+  const [ratingTool, setRatingTool] = useState<ServiceEntry | null>(null);
+  const [userRating, setUserRating] = useState(5);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   useEffect(() => {
     fetch("/api/services")
@@ -49,7 +54,8 @@ export function BazaarView({ catalog }: Props) {
 
   const allServices = [...catalog];
   services.forEach(s => {
-    if (!allServices.find(t => t.id === s.id)) {
+    const existingIdx = allServices.findIndex(t => t.id === s.id);
+    if (existingIdx === -1) {
       allServices.push({
         id: s.id,
         name: s.name,
@@ -62,40 +68,52 @@ export function BazaarView({ catalog }: Props) {
         rating: s.rating,
         ratingCount: s.ratingCount,
         providerSplitPercentage: s.providerSplitPercentage,
+        provider_address: s.provider_address,
+        asset_address: s.asset_address,
       } as any);
     } else {
-      const existing = allServices.find(t => t.id === s.id) as any;
-      if (existing) {
-         existing.rating = s.rating;
-         existing.ratingCount = s.ratingCount;
-         existing.providerSplitPercentage = s.providerSplitPercentage;
-      }
+      const existing = allServices[existingIdx] as any;
+      existing.rating = s.rating;
+      existing.ratingCount = s.ratingCount;
+      existing.providerSplitPercentage = s.providerSplitPercentage;
+      existing.provider_address = s.provider_address;
+      existing.asset_address = s.asset_address;
     }
   });
-const handleRate = async (id: string, rating: number) => {
-  const txHash = prompt("Please enter the Stellar Transaction Hash of your payment to verify your review:");
-  if (!txHash) return;
 
-  try {
-    const res = await fetch("/api/services/rate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, rating, txHash })
-    });
-    if (res.ok) {
-      alert("Verification successful! Thanks for rating.");
-      const updatedServicesRes = await fetch("/api/services");
-      const data = await updatedServicesRes.json();
-      setServices(data.services ?? []);
-      setBestValueId(data.bestValue?.id ?? null);
-    } else {
-      const error = await res.json();
-      alert(`Verification failed: ${error.error}`);
+  const handleRate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ratingTool) return;
+    
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const txHash = formData.get("txHash") as string;
+    
+    if (!txHash) return alert("Transaction hash is required to verify your purchase.");
+
+    setIsSubmittingRating(true);
+    try {
+      const res = await fetch("/api/services/rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: ratingTool.id, rating: userRating, txHash })
+      });
+      if (res.ok) {
+        alert("Verification successful! Rating updated.");
+        setRatingTool(null);
+        const updatedServicesRes = await fetch("/api/services");
+        const data = await updatedServicesRes.json();
+        setServices(data.services ?? []);
+        setBestValueId(data.bestValue?.id ?? null);
+      } else {
+        const error = await res.json();
+        alert(`Verification failed: ${error.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingRating(false);
     }
-  } catch (err) {
-    console.error(err);
-  }
-};
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to remove this service?")) return;
@@ -179,8 +197,8 @@ const handleRate = async (id: string, rating: number) => {
                     </div>
                     <div style={{ display: "flex", gap: "var(--s2)", alignItems: "center" }}>
                       <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "6px 12px" }} onClick={() => {
-                        const r = prompt("Rate this service (1-5):");
-                        if (r && parseInt(r) >= 1 && parseInt(r) <= 5) handleRate(tool.id, parseInt(r, 10));
+                        setRatingTool(tool);
+                        setUserRating(5);
                       }}>Rate</button>
                       <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "6px 12px" }} onClick={() => setSpecTool(tool)}>View Spec</button>
                       {!isDefault && (
@@ -206,22 +224,11 @@ const handleRate = async (id: string, rating: number) => {
         </div>
 
         {/* Professional Centered Provider Form */}
-        <div style={{ 
-          display: "flex", 
-          flexDirection: "column", 
-          alignItems: "center", 
-          padding: "var(--s16) var(--s8)",
-          background: "linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-card) 100%)",
-          borderTop: "1px solid var(--border-dim)",
-          textAlign: "center"
-        }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "var(--s16) var(--s8)", background: "linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-card) 100%)", borderTop: "1px solid var(--border-dim)", textAlign: "center" }}>
           <div style={{ maxWidth: "640px", width: "100%" }}>
             <div className="badge badge-indigo" style={{ marginBottom: "var(--s4)", padding: "4px 12px" }}>PROVIDER PROGRAM</div>
             <h2 className="h2" style={{ marginBottom: "var(--s3)", fontSize: "2.25rem", letterSpacing: "-0.02em" }}>Become a Service Provider</h2>
-            <p className="body-lg" style={{ marginBottom: "var(--s10)", color: "var(--text-body)" }}>
-              Join the agent-to-agent economy. List your AI service, set your price, and receive automated USDC payments on Stellar.
-            </p>
-
+            <p className="body-lg" style={{ marginBottom: "var(--s10)", color: "var(--text-body)" }}>Join the agent-to-agent economy. List your AI service, set your price, and receive automated USDC payments on Stellar.</p>
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
@@ -232,97 +239,64 @@ const handleRate = async (id: string, rating: number) => {
                   if (res.ok) { alert("Service registered successfully!"); window.location.reload(); }
                 } catch (err) { alert("Failed to register service."); }
               }}
-              style={{ 
-                display: "flex", 
-                flexDirection: "column", 
-                gap: "var(--s6)", 
-                background: "var(--bg-surface)", 
-                padding: "var(--s10)", 
-                borderRadius: "var(--r-2xl)", 
-                border: "1px solid var(--border-strong)", 
-                boxShadow: "0 32px 64px -12px rgba(0,0,0,0.6)",
-                textAlign: "left"
-              }}
+              style={{ display: "flex", flexDirection: "column", gap: "var(--s6)", background: "var(--bg-surface)", padding: "var(--s10)", borderRadius: "var(--r-2xl)", border: "1px solid var(--border-strong)", boxShadow: "0 32px 64px -12px rgba(0,0,0,0.6)", textAlign: "left" }}
             >
-              <div>
-                <div className="caption" style={{ marginBottom: "var(--s2)", color: "var(--text-muted)" }}>Service Name</div>
-                <input name="name" className="input" placeholder="e.g. GPT-4o Summarizer" style={{ fontSize: "1.125rem", fontWeight: 500 }} required />
-              </div>
-
+              <div><div className="caption" style={{ marginBottom: "var(--s2)", color: "var(--text-muted)" }}>Service Identity</div><input name="name" className="input" placeholder="e.g. GPT-4o Summarizer" style={{ fontSize: "1.125rem", fontWeight: 500 }} required /></div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s4)" }}>
-                <div>
-                  <div className="caption" style={{ marginBottom: "var(--s2)" }}>Price (USDC)</div>
-                  <div style={{ position: "relative" }}>
-                    <div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "var(--emerald)", fontWeight: 600 }}>$</div>
-                    <input name="price_usd" className="input" placeholder="0.05" style={{ paddingLeft: "2.5rem" }} required />
-                  </div>
-                </div>
-                <div>
-                  <div className="caption" style={{ marginBottom: "var(--s2)" }}>Protocol</div>
-                  <select name="protocol" className="input" style={{ appearance: "none", cursor: "pointer" }}>
-                    <option value="x402">x402 (Standard)</option>
-                    <option value="mpp">MPP (Session)</option>
-                  </select>
-                </div>
+                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Price (USDC)</div><div style={{ position: "relative" }}><div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "var(--emerald)", fontWeight: 600 }}>$</div><input name="price_usd" className="input" placeholder="0.05" style={{ paddingLeft: "2.5rem" }} required /></div></div>
+                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Protocol</div><select name="protocol" className="input" style={{ appearance: "none", cursor: "pointer" }}><option value="x402">x402 (Standard)</option><option value="mpp">MPP (Session)</option></select></div>
               </div>
-
-              <div>
-                <div className="caption" style={{ marginBottom: "var(--s2)" }}>API Endpoint URL</div>
-                <input name="endpoint" className="input" placeholder="https://api.yourdomain.com/v1/task" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required />
-              </div>
-
+              <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>API Endpoint URL</div><input name="endpoint" className="input" placeholder="https://api.yourdomain.com/v1/task" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required /></div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s4)" }}>
-                <div>
-                  <div className="caption" style={{ marginBottom: "var(--s2)" }}>Provider Wallet Address</div>
-                  <input name="provider_address" className="input" placeholder="G..." style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required />
-                </div>
-                <div>
-                  <div className="caption" style={{ marginBottom: "var(--s2)" }}>Asset Issuer (Testnet)</div>
-                  <input name="asset_address" className="input" placeholder="CBIELTK6..." defaultValue="CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required />
-                </div>
+                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Provider Wallet Address</div><input name="provider_address" className="input" placeholder="G..." style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required /></div>
+                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Asset Issuer (Testnet)</div><input name="asset_address" className="input" placeholder="CBIELTK6..." defaultValue="CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required /></div>
               </div>
-
-              <div>
-                <div className="caption" style={{ marginBottom: "var(--s2)" }}>Description</div>
-                <textarea name="description" className="input" placeholder="What does your tool do? (shown to agents)" style={{ minHeight: "120px", resize: "none", lineHeight: 1.5 }} required />
-              </div>
-              
-              <div>
-                <div className="caption" style={{ marginBottom: "var(--s2)" }}>Provider Split Percentage (e.g., 0.7 for 70%)</div>
-                <input name="provider_split_percentage" className="input" placeholder="0.7" defaultValue="0.7" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required />
-              </div>
-
-              <button type="submit" className="btn btn-primary" style={{ padding: "var(--s4)", fontSize: "1rem", borderRadius: "var(--r-xl)", marginTop: "var(--s2)" }}>
-                <Plus size={20} /> Register My Service
-              </button>
+              <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Description</div><textarea name="description" className="input" placeholder="What does your tool do? (shown to agents)" style={{ minHeight: "120px", resize: "none", lineHeight: 1.5 }} required /></div>
+              <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Provider Split Percentage (e.g., 0.7 for 70%)</div><input name="provider_split_percentage" className="input" placeholder="0.7" defaultValue="0.7" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required /></div>
+              <button type="submit" className="btn btn-primary" style={{ padding: "var(--s4)", fontSize: "1rem", borderRadius: "var(--r-xl)", marginTop: "var(--s2)" }}><Plus size={20} /> Register My Service</button>
             </form>
-            
             <div style={{ marginTop: "var(--s8)", display: "flex", alignItems: "center", justifyContent: "center", gap: "var(--s2)", color: "var(--text-dim)", fontSize: "0.875rem" }}>
               <span>Need help?</span>
-              <a 
-                href="https://github.com/mokwathedeveloper/Agent-Paywall-Router#integration-guide" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{ 
-                  color: "var(--emerald)", 
-                  fontWeight: 600, 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: 4,
-                  textDecoration: "underline",
-                  cursor: "pointer",
-                  position: "relative",
-                  zIndex: 2
-                }}
-              >
-                Read the Integration Guide <ArrowRight size={14} />
-              </a>
+              <a href="https://github.com/mokwathedeveloper/Agent-Paywall-Router#integration-guide" target="_blank" rel="noopener noreferrer" style={{ color: "var(--emerald)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textDecoration: "underline", cursor: "pointer", position: "relative", zIndex: 2 }}>Read the Integration Guide <ArrowRight size={14} /></a>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Rating Modal */}
+      <AnimatePresence>
+        {ratingTool && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "var(--s6)" }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-strong)", borderRadius: "var(--r-2xl)", width: "100%", maxWidth: 480, padding: "var(--s8)", boxShadow: "0 32px 64px rgba(0,0,0,0.5)" }}>
+              <div style={{ textAlign: "center", marginBottom: "var(--s6)" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--amber-dim)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto var(--s4)" }}><Star size={28} color="var(--amber)" fill="var(--amber)" /></div>
+                <h3 className="h2" style={{ fontSize: "1.5rem" }}>Rate {ratingTool.name}</h3>
+                <p className="body" style={{ color: "var(--text-muted)" }}>Share your experience with this agent service.</p>
+              </div>
+              <form onSubmit={handleRate} style={{ display: "flex", flexDirection: "column", gap: "var(--s6)" }}>
+                <div style={{ display: "flex", justifyContent: "center", gap: "var(--s2)" }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button key={star} type="button" onClick={() => setUserRating(star)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+                      <Star size={36} fill={star <= userRating ? "var(--amber)" : "none"} color={star <= userRating ? "var(--amber)" : "var(--text-muted)"} />
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <div className="caption" style={{ marginBottom: "var(--s2)" }}>Verification Transaction Hash</div>
+                  <input name="txHash" className="input" placeholder="stellar:..." required style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }} />
+                  <p style={{ fontSize: "0.625rem", color: "var(--text-dim)", marginTop: "var(--s2)" }}>To prevent fake reviews, ratings require a valid Stellar payment hash for this service.</p>
+                </div>
+                <div style={{ display: "flex", gap: "var(--s3)" }}>
+                  <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setRatingTool(null)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={isSubmittingRating}>{isSubmittingRating ? "Verifying..." : "Submit Rating"}</button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Spec Modal */}
       <AnimatePresence>
         {specTool && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSpecTool(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(12px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "var(--s6)" }}>
@@ -346,25 +320,10 @@ const handleRate = async (id: string, rating: number) => {
                     </div>
                   ))}
                 </div>
-                
-                {/* Provider Split Display */}
                 <div style={{ marginBottom: "var(--s6)", padding: "var(--s4)", background: "var(--bg-deep)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-md)", display: "flex", alignItems: "center", gap: "var(--s4)" }}>
-                   <div style={{ flex: 1 }}>
-                     <div className="caption" style={{ marginBottom: "var(--s1)", color: "var(--text-muted)" }}>Economic Model</div>
-                     <div style={{ fontSize: "0.875rem", color: "var(--text-body)" }}>
-                       <span style={{ fontWeight: 600, color: "var(--emerald)" }}>{((specTool as any).providerSplitPercentage ?? 0.7) * 100}%</span> Revenue Split to Provider
-                     </div>
-                   </div>
-                   <div style={{ flex: 1, borderLeft: "1px solid var(--border-dim)", paddingLeft: "var(--s4)" }}>
-                     <div className="caption" style={{ marginBottom: "var(--s1)", color: "var(--text-muted)" }}>Reputation</div>
-                     <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.875rem", fontWeight: 600 }}>
-                        <Star size={14} fill="currentColor" />
-                        <span>{(specTool as any).rating ? (specTool as any).rating.toFixed(1) : "New"}</span>
-                        <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>({(specTool as any).ratingCount ?? 0} reviews)</span>
-                      </div>
-                   </div>
+                   <div style={{ flex: 1 }}><div className="caption" style={{ marginBottom: "var(--s1)", color: "var(--text-muted)" }}>Economic Model</div><div style={{ fontSize: "0.875rem", color: "var(--text-body)" }}><span style={{ fontWeight: 600, color: "var(--emerald)" }}>{((specTool as any).providerSplitPercentage ?? 0.7) * 100}%</span> Revenue Split to Provider</div></div>
+                   <div style={{ flex: 1, borderLeft: "1px solid var(--border-dim)", paddingLeft: "var(--s4)" }}><div className="caption" style={{ marginBottom: "var(--s1)", color: "var(--text-muted)" }}>Reputation</div><div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.875rem", fontWeight: 600 }}><Star size={14} fill="currentColor" /><span>{(specTool as any).rating ? (specTool as any).rating.toFixed(1) : "New"}</span><span style={{ color: "var(--text-muted)", fontWeight: 400 }}>({(specTool as any).ratingCount ?? 0} reviews)</span></div></div>
                 </div>
-
                 <div style={{ marginBottom: "var(--s6)" }}>
                   <div className="caption" style={{ marginBottom: "var(--s3)" }}>Endpoint</div>
                   <code style={{ display: "block", padding: "var(--s4)", background: "var(--bg-deep)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-md)", fontSize: "0.875rem", color: "var(--emerald)", fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>{specTool.method} {specTool.url}</code>
@@ -376,7 +335,7 @@ const handleRate = async (id: string, rating: number) => {
                 <div>
                   <div className="caption" style={{ marginBottom: "var(--s3)" }}>x402 Protocol Implementation</div>
                   <pre style={{ padding: "var(--s5)", background: "var(--bg-deep)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-xl)", fontSize: "0.8125rem", color: "var(--text-body)", fontFamily: "var(--font-mono)", whiteSpace: "pre-wrap", wordBreak: "break-all", lineHeight: 1.6, margin: 0 }}>
-                    {JSON.stringify({ x402Version: 2, resource: { url: specTool.url }, accepts: [{ scheme: "exact", network: specTool.payment?.network ?? "stellar:testnet", asset: specTool.payment?.currency ?? "USDC", amount: String(Math.round(specTool.priceUsd * 10_000_000)), payTo: "<RECEIVER_ADDRESS>", facilitator: "https://x402.org/facilitator", extra: { areFeesSponsored: true } }] }, null, 2)}
+                    {JSON.stringify({ x402Version: 2, resource: { url: specTool.url }, accepts: [{ scheme: "exact", network: specTool.payment?.network ?? "stellar:testnet", asset: specTool.payment?.currency ?? "USDC", amount: String(Math.round(specTool.priceUsd * 10_000_000)), payTo: (specTool as any).provider_address || "<RECEIVER_ADDRESS>", facilitator: "https://x402.org/facilitator", extra: { areFeesSponsored: true } }] }, null, 2)}
                   </pre>
                 </div>
               </div>
