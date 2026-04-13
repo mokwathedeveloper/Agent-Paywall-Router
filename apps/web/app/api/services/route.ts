@@ -66,7 +66,7 @@ export async function GET(_req: Request): Promise<NextResponse> {
     {
       headers: {
         "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "public, max-age=30",
+        "Cache-Control": "no-store, max-age=0",
       },
     }
   );
