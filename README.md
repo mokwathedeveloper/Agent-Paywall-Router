@@ -459,6 +459,31 @@ npx tsc --noEmit   # TypeScript check
 
 ---
 
+## 🏆 Hackathon Differentiators
+
+The Agent Paywall Router introduces several unique features that set it apart in the Stellar ecosystem:
+
+### 1. Agent-to-Agent (A2A) Commerce
+Most platforms focus on humans paying for AI. We demonstrate **Machine-to-Machine commerce**. 
+- **The Scenario**: Agent B (Buyer) discovers an endpoint hosted by Agent A (Provider). 
+- **The Flow**: Agent B autonomously signs a USDC transaction to Agent A's wallet to unlock data.
+- **Proof**: Visit the `/workspace/a2a` page to run a real-time A2A commerce demo.
+
+### 2. Deterministic Value Logic (Cost + Reputation)
+We moved beyond "pick the cheapest." Our router implements a sophisticated selection algorithm:
+- **Value Score**: `Score = Price * (1 - Rating/5)`
+- This ensures agents prioritize **quality and reliability** alongside cost, creating a true competitive marketplace for services.
+
+### 3. Dynamic Service Registry
+External developers can register their own APIs in real-time via the **Tool Bazaar**.
+- **No-Code Integration**: Once a service is registered, the agent's LLM immediately discovers it via `/api/catalog` and begins considering it for tasks.
+- **Configurable Splits**: Providers set their own revenue share during registration.
+
+### 4. Dual Protocol Support
+The only router to support both **x402 (HTTP Standard)** and **MPP (Stripe Machine Payments)** on the same infrastructure, providing maximum flexibility for different agent architectures.
+
+---
+
 ## Integration Guide
 
 ### Registering a New Service
