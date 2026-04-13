@@ -1,95 +1,48 @@
 /**
  * GET /api/services
- *
  * Agent-optimised service marketplace registry.
- * Returns available paid services sorted by price (cheapest first) so agents
- * can make cost-aware decisions without parsing the full catalog.
+ * Returns available paid services sorted by price (cheapest first).
  *
- * This is a thin projection of /api/catalog — no duplicate logic.
- * The catalog remains the source of truth; this endpoint formats it for agents.
- *
- * Response shape is intentionally minimal so LLMs can parse it cheaply.
+ * POST /api/services
+ * Allows external service providers to register with the system.
  */
 import { NextResponse } from "next/server";
-import { TOOL_PRICES, SPENDING_POLICY_CONTRACT_ID } from "@/lib/constants";
+import { getAllServices, addService } from "@/lib/db";
 
 export interface ServiceEntry {
   id: string;
   name: string;
   description: string;
   priceUsd: number;
-  protocol: "x402" | "mpp";
+  protocol: string;
   endpoint: string;
-  method: "GET" | "POST";
+  method: string;
   inputParam: string;
-  stellarNetwork: "stellar:testnet";
+  stellarNetwork: string;
   spendingPolicyContract: string;
 }
 
-export async function GET(req: Request): Promise<NextResponse> {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_BASE_URL ??
-    `${req.headers.get("x-forwarded-proto") ?? "https"}://${req.headers.get("host") ?? "localhost:3000"}`;
-
-  const services: ServiceEntry[] = [
-    {
-      id: "search",
-      name: "Web Search",
-      description: "Real-time web search via DuckDuckGo + Wikipedia. Use for unknown facts, news, current events.",
-      priceUsd: TOOL_PRICES.search,
-      protocol: "x402",
-      endpoint: `${baseUrl}/api/tools/search`,
-      method: "GET",
-      inputParam: "q",
-      stellarNetwork: "stellar:testnet",
-      spendingPolicyContract: SPENDING_POLICY_CONTRACT_ID,
-    },
-    {
-      id: "summarize",
-      name: "Text Summarizer",
-      description: "Extracts key points and summary from long text. Use only after retrieving content that needs condensing.",
-      priceUsd: TOOL_PRICES.summarize,
-      protocol: "x402",
-      endpoint: `${baseUrl}/api/tools/summarize`,
-      method: "POST",
-      inputParam: "text",
-      stellarNetwork: "stellar:testnet",
-      spendingPolicyContract: SPENDING_POLICY_CONTRACT_ID,
-    },
-    {
-      id: "analyze",
-      name: "Sentiment Analyzer",
-      description: "Sentiment analysis, entity extraction, theme detection. Use for deeper insight on retrieved content.",
-      priceUsd: TOOL_PRICES.analyze,
-      protocol: "x402",
-      endpoint: `${baseUrl}/api/tools/analyze`,
-      method: "POST",
-      inputParam: "text",
-      stellarNetwork: "stellar:testnet",
-      spendingPolicyContract: SPENDING_POLICY_CONTRACT_ID,
-    },
-    {
-      id: "mpp-search",
-      name: "MPP Web Search",
-      description: "Web search via Stripe Machine Payments Protocol. Alternative to x402 for session-based flows.",
-      priceUsd: TOOL_PRICES.search,
-      protocol: "mpp",
-      endpoint: `${baseUrl}/api/tools/mpp`,
-      method: "POST",
-      inputParam: "query",
-      stellarNetwork: "stellar:testnet",
-      spendingPolicyContract: SPENDING_POLICY_CONTRACT_ID,
-    },
-  ];
-
-  // Sort cheapest first — agents should prefer lower-cost options
-  const sorted = [...services].sort((a, b) => a.priceUsd - b.priceUsd);
+export async function GET(_req: Request): Promise<NextResponse> {
+  const dbServices = await getAllServices();
+  
+  const services: ServiceEntry[] = dbServices.map(s => ({
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    priceUsd: s.price_usd,
+    protocol: s.protocol,
+    endpoint: s.endpoint,
+    method: s.method,
+    inputParam: s.input_param,
+    stellarNetwork: s.stellar_network,
+    spendingPolicyContract: s.spending_policy_contract,
+  }));
 
   return NextResponse.json(
     {
-      services: sorted,
-      totalServices: sorted.length,
-      cheapest: sorted[0],
+      services: services,
+      totalServices: services.length,
+      cheapest: services[0],
       network: "stellar:testnet",
       paymentProtocols: ["x402", "mpp"],
       agentHint:
@@ -105,4 +58,32 @@ export async function GET(req: Request): Promise<NextResponse> {
       },
     }
   );
+}
+
+export async function POST(req: Request): Promise<NextResponse> {
+  try {
+    const body = await req.json();
+    const { name, price_usd, endpoint, description, protocol, method, input_param } = body;
+
+    if (!name || !price_usd || !endpoint) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    const service = await addService({
+      name,
+      price_usd: parseFloat(price_usd),
+      endpoint,
+      description: description || "",
+      protocol: protocol || "x402",
+      method: method || "POST",
+      input_param: input_param || "text",
+      stellar_network: "stellar:testnet",
+      spending_policy_contract: "none", // External services might not use our policy
+      is_external: true,
+    });
+
+    return NextResponse.json(service, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
 }
