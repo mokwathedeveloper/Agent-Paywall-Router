@@ -40,15 +40,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   // ─── ON-CHAIN REVENUE SPLITTING ───
-  const providerAddress = process.env.STELLAR_RECEIVER_ADDRESS || "";
-  const policy = await authorizeSplitSpendingPolicyForVerifiedPayment(
-    vr.paymentPayload, 
-    "weather", 
-    providerAddress, 
-    0.8 // 80% to provider
-  );
-  if (policy instanceof NextResponse) return policy;
+  try {
+    const providerAddress = process.env.STELLAR_RECEIVER_ADDRESS || "";
+    const policy = await authorizeSplitSpendingPolicyForVerifiedPayment(
+      vr.paymentPayload, 
+      "weather", 
+      providerAddress, 
+      0.8 // 80% to provider
+    );
+    if (policy instanceof NextResponse) return policy;
 
-  const result = await getWeather(location);
-  return settlePaidToolJsonWithProofs(vr, "weather", "$0.05", result as Record<string, unknown>, policy);
+    const result = await getWeather(location);
+    return settlePaidToolJsonWithProofs(vr, "weather", "$0.05", result as Record<string, unknown>, policy);
+  } catch (err) {
+    console.error("[weather] critical error:", err);
+    return NextResponse.json({ error: "Internal Server Error", detail: String(err) }, { status: 500 });
+  }
 }
