@@ -100,3 +100,25 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
+
+export async function DELETE(req: Request): Promise<NextResponse> {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing service ID" }, { status: 400 });
+    }
+
+    const dbModule = await import("@/lib/db");
+    const success = await dbModule.deleteService(id);
+
+    if (success) {
+      return NextResponse.json({ success: true }, { status: 200 });
+    } else {
+      return NextResponse.json({ error: "Service not found or cannot be deleted" }, { status: 403 });
+    }
+  } catch (error) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+}
