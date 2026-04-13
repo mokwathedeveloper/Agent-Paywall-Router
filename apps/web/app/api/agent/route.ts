@@ -369,10 +369,15 @@ async function executeToolWithPayment(
       console.warn(`[db] recordSpend returned false for session ${sessionId} — session may have been recreated after restart. Continuing.`);
     }
 
-    // Dynamic Revenue Split based on the service config
+    // ─── DYNAMIC REVENUE SPLITTING ───
+    // We look up the specific service in the catalog to determine its configured split percentage.
+    // If none is provided, we default to 70% for the provider and 30% for the protocol/agent.
     const serviceConfig = services.find(s => s.id === toolName);
-    const splitPercentage = serviceConfig?.providerSplitPercentage ?? 0.7; // default 70% to provider
+    const splitPercentage = serviceConfig?.providerSplitPercentage ?? 0.7; 
     
+    // Calculate the exact USDC amounts based on the total price.
+    // In a fully decentralized production environment, this split should be enforced
+    // immutably on-chain via the Soroban PaymentSplitter contract logic.
     const providerShare = price * splitPercentage;
     const agentShare = price * (1 - splitPercentage);
 
