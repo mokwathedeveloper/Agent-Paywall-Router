@@ -14,8 +14,6 @@ import {
   USDC_CONTRACT_ADDRESS,
   X402_VERSION,
   DEFAULT_FACILITATOR_URL,
-  TOOL_PRICES_TOKEN_UNITS,
-  TOOL_PRICES,
   SPENDING_POLICY_CONTRACT_ID,
 } from "@/lib/constants";
 
@@ -42,15 +40,19 @@ export async function GET(req: Request) {
     resource: `${baseUrl}${path}`,
   });
 
-  const makeMppSpec = (amount: string) => ({
-    protocol: "mpp",
-    version: "0.2.0",
-    network: "stellar:testnet",
-    currency: "USDC",
-    amount_usd: amount,
-    recipient: receiver,
-    endpoint: `${baseUrl}/api/tools/mpp`,
-  });
+  const dbServices = await import("@/lib/db").then(m => m.getAllServices());
+
+  const tools = dbServices.map(s => ({
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    method: s.method,
+    url: s.endpoint.startsWith("http") ? s.endpoint : `${baseUrl}${s.endpoint}`,
+    priceUsd: s.price_usd,
+    payment: s.protocol === "x402" 
+      ? makeX402Spec(Math.round(s.price_usd * 10_000_000).toString(), s.endpoint)
+      : { protocol: "mpp", version: "0.2.0", network: "stellar:testnet", currency: "USDC", amount_usd: s.price_usd.toString(), recipient: receiver, endpoint: s.endpoint.startsWith("http") ? s.endpoint : `${baseUrl}${s.endpoint}` }
+  }));
 
   return NextResponse.json({
     // ── Service identity ──────────────────────────────────────────────────
@@ -77,62 +79,7 @@ export async function GET(req: Request) {
     },
 
     // ── Tools ─────────────────────────────────────────────────────────────
-    tools: [
-      {
-        id: "search",
-        name: "Web Search",
-        description: "Real-time web search via DuckDuckGo + Wikipedia. Returns titles, snippets, and URLs.",
-        method: "GET",
-        url: `${baseUrl}/api/tools/search`,
-        params: { q: "string — search query" },
-        priceUsd: TOOL_PRICES.search,
-        payment: makeX402Spec(TOOL_PRICES_TOKEN_UNITS.search, "/api/tools/search"),
-        example: {
-          request: `GET ${baseUrl}/api/tools/search?q=Stellar+blockchain`,
-          headers: { "x402-receipt": "<payment_receipt>" },
-        },
-      },
-      {
-        id: "summarize",
-        name: "Text Summarizer",
-        description: "Extracts key points and summary from any text input.",
-        method: "POST",
-        url: `${baseUrl}/api/tools/summarize`,
-        body: { text: "string — text to summarize" },
-        priceUsd: TOOL_PRICES.summarize,
-        payment: makeX402Spec(TOOL_PRICES_TOKEN_UNITS.summarize, "/api/tools/summarize"),
-        example: {
-          request: `POST ${baseUrl}/api/tools/summarize`,
-          headers: { "Content-Type": "application/json", "x402-receipt": "<payment_receipt>" },
-          body: { text: "Your text here..." },
-        },
-      },
-      {
-        id: "analyze",
-        name: "Sentiment Analyzer",
-        description: "Sentiment analysis, entity extraction, and theme detection.",
-        method: "POST",
-        url: `${baseUrl}/api/tools/analyze`,
-        body: { text: "string — text to analyze" },
-        priceUsd: TOOL_PRICES.analyze,
-        payment: makeX402Spec(TOOL_PRICES_TOKEN_UNITS.analyze, "/api/tools/analyze"),
-        example: {
-          request: `POST ${baseUrl}/api/tools/analyze`,
-          headers: { "Content-Type": "application/json", "x402-receipt": "<payment_receipt>" },
-          body: { text: "Your text here..." },
-        },
-      },
-      {
-        id: "mpp-search",
-        name: "MPP Web Search",
-        description: "Web search via Stripe Machine Payments Protocol (MPP) — alternative to x402 for session-based flows.",
-        method: "POST",
-        url: `${baseUrl}/api/tools/mpp`,
-        body: { query: "string — search query" },
-        priceUsd: TOOL_PRICES.search,
-        payment: makeMppSpec("0.01"),
-      },
-    ],
+    tools,
 
     // ── Agent integration guide ───────────────────────────────────────────
     agentGuide: {
