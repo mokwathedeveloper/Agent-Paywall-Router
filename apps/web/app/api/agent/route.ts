@@ -6,6 +6,7 @@ import { generateText, jsonSchema, stepCountIs } from "ai";
 import { resolveModel } from "@/lib/llm";
 import { scanPrompt, requireSafeInput } from "@/lib/services/security";
 import type { ServiceEntry } from "@/app/api/services/route";
+import { authorizeSplitSpendingPolicy } from "@/lib/onchain/spending-policy";
 
 export const maxDuration = 90;
 
