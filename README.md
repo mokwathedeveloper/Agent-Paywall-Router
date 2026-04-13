@@ -459,6 +459,62 @@ npx tsc --noEmit   # TypeScript check
 
 ---
 
+## Integration Guide
+
+### Registering a New Service
+1. Open the **Tool Bazaar** in the web UI.
+2. Scroll to the **"Become a Service Provider"** section.
+3. Fill in the details (Name, Price, Endpoint, Split Percentage) and click **Register**.
+4. The service is now instantly available in the marketplace, and the agent's LLM prompt will automatically discover it.
+
+### How Revenue Splitting Works
+When an agent pays for a service (e.g., $0.05 USDC), the payment router intercepts the transaction. Instead of sending 100% to the provider, the system splits the payment based on the configured `providerSplitPercentage` (default 70%).
+- 70% goes to the Service Provider.
+- 30% goes to the Agent Paywall Router (Protocol Fee).
+This breakdown is visibly logged in the **Payment Ledger** and **Execution** views for full transparency.
+
+### Reputation System
+The marketplace now supports deterministic service discovery. Instead of just picking the absolute cheapest tool, the agent calculates a **Value Score**:
+`Score = Cost * (1 - Rating / 5)`
+- Lower score is better.
+- A highly-rated, slightly more expensive tool might be chosen over a cheap, unrated tool.
+- You can manually rate tools in the **Tool Bazaar** view.
+
+---
+
+## FAQ
+
+**Q: How do I test the new Google News integration?**
+A: Go to the Workspace and type: `Search for the latest news on Stellar`. The agent will use the updated `search` tool to fetch real-time RSS feeds from Google News.
+
+**Q: Where is the reputation data saved?**
+A: If you have Supabase configured (see `SUPABASE_URL` in `.env.local`), ratings and services are saved permanently in the database. Otherwise, they are stored in memory and reset on server restart.
+
+**Q: What is the new Weather API?**
+A: The global weather API was integrated as a "High-Value API" to demonstrate the dynamic nature of the marketplace. It costs $0.05 USDC and returns real-time conditions using Open-Meteo. Ask the agent: `What is the weather in Tokyo?` to test it.
+
+---
+
+## Future Roadmap
+
+While the Agent Paywall Router is fully functional on the Stellar Testnet with persistent database support, the following enhancements are planned for production-grade scaling:
+
+- **On-Chain Revenue Splitting**: Currently, revenue splits are calculated and recorded at the application layer for performance. Future iterations will utilize a Soroban `PaymentSplitter` contract for immutable, on-chain distribution.
+- **Provider Authentication**: Integration with Stellar Wallet Connect to cryptographically verify service ownership during registration.
+- **Advanced Reputation Security**: Implementing a "Verified Purchaser" gate for the rating system, requiring an on-chain transaction hash to validate reviews.
+- **Multi-Asset Support**: Expanding beyond USDC to support any Soroban-compliant token on Stellar.
+
+---
+
+## Technical Stack Performance
+
+- **Persistence**: Full Supabase integration for sessions, services, and transaction history.
+- **Reliability**: Deterministic decision algorithm balancing Cost vs. Reputation.
+- **Real-time**: Google News RSS and Open-Meteo Weather integration for live data demonstration.
+- **Validation**: Strict hard budget enforcement at both the database and application levels.
+
+---
+
 ## License
 
 MIT — Mokwa Moffat Ohuru
