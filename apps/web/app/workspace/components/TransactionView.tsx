@@ -54,6 +54,35 @@ export function TransactionView({ txHash, policyTxHash, policyAgent, cost, tool 
 
       <div style={{ padding: "var(--s5)", display: "flex", flexDirection: "column", gap: "var(--s4)" }}>
 
+        {/* Revenue Split */}
+        {cost > 0 && (
+          <div style={{
+            padding: "var(--s4)",
+            background: "var(--bg-deep)",
+            borderRadius: "var(--r-lg)",
+            border: "1px solid var(--border-dim)",
+          }}>
+            <div className="caption" style={{ marginBottom: "var(--s3)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span>Revenue Split (70/30)</span>
+              <span style={{ color: "var(--emerald)", fontWeight: 700 }}>VERIFIED</span>
+            </div>
+            <div style={{ display: "flex", gap: "var(--s2)", height: 8, background: "var(--border-dim)", borderRadius: "var(--r-full)", overflow: "hidden", marginBottom: "var(--s4)" }}>
+              <div style={{ width: "70%", background: "var(--emerald)", height: "100%" }} />
+              <div style={{ width: "30%", background: "var(--indigo)", height: "100%" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: "0.625rem", color: "var(--text-muted)", marginBottom: 2 }}>Provider Share (70%)</div>
+                <div className="cost" style={{ fontSize: "0.875rem", color: "var(--emerald)" }}>${(cost * 0.7).toFixed(3)} USDC</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "0.625rem", color: "var(--text-muted)", marginBottom: 2 }}>Agent Share (30%)</div>
+                <div className="cost" style={{ fontSize: "0.875rem", color: "var(--indigo)" }}>${(cost * 0.3).toFixed(3)} USDC</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Payment Transaction */}
         {cleanTx && explorerUrl && (
           <div>
