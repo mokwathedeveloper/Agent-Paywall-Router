@@ -566,98 +566,116 @@ function SettingsView({ session }: { session: import("@/lib/types").DBSession | 
   ];
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "var(--s8) var(--s10)" }}>
-      <div style={{ marginBottom: "var(--s8)" }}>
-        <h2 className="h2" style={{ marginBottom: "var(--s2)" }}>Configuration</h2>
-        <p className="body">Active session settings and network parameters.</p>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "var(--s4)", maxWidth: 900 }}>
-        {fields.map((f) => (
-          <div key={f.label} style={{
-            background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
-            borderRadius: "var(--r-xl)", padding: "var(--s5)",
-            display: "flex", flexDirection: "column", gap: "var(--s3)",
-            transition: "border-color var(--normal) var(--ease)",
-          }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-dim)")}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: "var(--r-sm)",
-                background: `${f.color}18`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <f.icon size={14} color={f.color} />
-              </div>
-              <span className="caption">{f.label}</span>
-            </div>
-            <div style={{
-              fontFamily: f.mono ? "var(--font-mono)" : "var(--font)",
-              fontSize: f.mono ? "0.8125rem" : "0.9375rem",
-              fontWeight: 600, color: "var(--text)", wordBreak: "break-all", lineHeight: 1.4,
-            }}>
-              {f.value}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ marginTop: "var(--s8)", maxWidth: 900 }}>
-        <div className="caption" style={{ marginBottom: "var(--s4)", display: "flex", alignItems: "center", gap: "var(--s2)" }}>
-          <Wallet size={13} /> Wallet Connection
+    <div style={{ 
+      flex: 1, 
+      overflowY: "auto", 
+      padding: "var(--s12) var(--s8)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center"
+    }}>
+      <div style={{ maxWidth: 900, width: "100%" }}>
+        <div style={{ marginBottom: "var(--s10)", textAlign: "center" }}>
+          <h2 className="h2" style={{ marginBottom: "var(--s2)", fontSize: "2.5rem" }}>Configuration</h2>
+          <p className="body-lg">Active session settings and network parameters.</p>
         </div>
-        <WalletConnect />
-      </div>
 
-      <div style={{ marginTop: "var(--s5)", maxWidth: 900 }}>
-        <div className="caption" style={{ marginBottom: "var(--s4)", display: "flex", alignItems: "center", gap: "var(--s2)" }}>
-          <Zap size={13} /> Payment Protocols
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s3)" }}>
-          {[
-            { label: "x402", desc: "HTTP-native per-request payments", color: "var(--emerald)" },
-            { label: "MPP", desc: "Machine Payments Protocol by Stripe", color: "var(--indigo)" },
-          ].map((p) => (
-            <div key={p.label} style={{
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "var(--s4)", marginBottom: "var(--s10)" }}>
+          {fields.map((f) => (
+            <div key={f.label} style={{
               background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
-              borderRadius: "var(--r-lg)", padding: "var(--s4)",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s1)" }}>
-                <span style={{ fontWeight: 700, fontSize: "0.9375rem", color: p.color }}>{p.label}</span>
-                <span className="badge badge-emerald" style={{ fontSize: "0.5625rem" }}>Active</span>
+              borderRadius: "var(--r-xl)", padding: "var(--s6)",
+              display: "flex", flexDirection: "column", gap: "var(--s3)",
+              transition: "all 0.2s var(--ease)",
+            }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--border)";
+                e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--border-dim)";
+                e.currentTarget.style.transform = "translateY(0)";
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: "var(--r-sm)",
+                  background: `${f.color}18`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <f.icon size={14} color={f.color} />
+                </div>
+                <span className="caption">{f.label}</span>
               </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{p.desc}</div>
+              <div style={{
+                fontFamily: f.mono ? "var(--font-mono)" : "var(--font)",
+                fontSize: f.mono ? "0.8125rem" : "0.9375rem",
+                fontWeight: 600, color: "var(--text)", wordBreak: "break-all", lineHeight: 1.4,
+              }}>
+                {f.value}
+              </div>
             </div>
           ))}
         </div>
-      </div>
 
-      <div style={{
-        marginTop: "var(--s8)", maxWidth: 900,
-        padding: "var(--s4) var(--s5)", background: "var(--emerald-dim)",
-        border: "1px solid rgba(16,185,129,0.2)", borderRadius: "var(--r-lg)",
-        display: "flex", alignItems: "center", gap: "var(--s3)",
-      }}>
-        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--emerald)", flexShrink: 0, animation: "pulse-dot 2s ease infinite" }} />
-        <span style={{ fontSize: "0.8125rem", color: "var(--emerald)", fontWeight: 500 }}>
-          Connected to Stellar Testnet · x402 Protocol v2 · USDC micropayments active
-        </span>
-      </div>
+        <div style={{ marginBottom: "var(--s10)" }}>
+          <div className="caption" style={{ marginBottom: "var(--s4)", display: "flex", alignItems: "center", gap: "var(--s2)", justifyContent: "center" }}>
+            <Wallet size={13} /> Wallet Connection
+          </div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <div style={{ width: "100%", maxWidth: 500 }}>
+              <WalletConnect />
+            </div>
+          </div>
+        </div>
 
-      <div style={{ marginTop: "var(--s5)", maxWidth: 900 }}>
-        <a
-          href={`https://stellar.expert/explorer/testnet/contract/${SPENDING_POLICY_CONTRACT_ID}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex", alignItems: "center", gap: "var(--s2)",
-            fontSize: "0.8125rem", color: "var(--emerald)",
-          }}
-        >
-          <AlertCircle size={13} /> View Soroban Spending Policy on Stellar Expert
-        </a>
+        <div style={{ marginBottom: "var(--s10)" }}>
+          <div className="caption" style={{ marginBottom: "var(--s4)", display: "flex", alignItems: "center", gap: "var(--s2)", justifyContent: "center" }}>
+            <Zap size={13} /> Payment Protocols
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s4)" }}>
+            {[
+              { label: "x402", desc: "HTTP-native per-request payments", color: "var(--emerald)" },
+              { label: "MPP", desc: "Machine Payments Protocol by Stripe", color: "var(--indigo)" },
+            ].map((p) => (
+              <div key={p.label} style={{
+                background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
+                borderRadius: "var(--r-lg)", padding: "var(--s5)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s2)" }}>
+                  <span style={{ fontWeight: 700, fontSize: "1rem", color: p.color }}>{p.label}</span>
+                  <span className="badge badge-emerald" style={{ fontSize: "0.5625rem" }}>Active</span>
+                </div>
+                <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>{p.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{
+          padding: "var(--s6)", background: "var(--emerald-dim)",
+          border: "1px solid rgba(16,185,129,0.2)", borderRadius: "var(--r-xl)",
+          display: "flex", alignItems: "center", gap: "var(--s4)", marginBottom: "var(--s6)"
+        }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--emerald)", flexShrink: 0, animation: "pulse-dot 2s ease infinite" }} />
+          <span style={{ fontSize: "0.875rem", color: "var(--emerald)", fontWeight: 600 }}>
+            Connected to Stellar Testnet · x402 Protocol v2 · USDC micropayments active
+          </span>
+        </div>
+
+        <div style={{ textAlign: "center" }}>
+          <a
+            href={`https://stellar.expert/explorer/testnet/contract/${SPENDING_POLICY_CONTRACT_ID}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "var(--s2)",
+              fontSize: "0.875rem", color: "var(--emerald)", fontWeight: 500, textDecoration: "underline"
+            }}
+          >
+            <AlertCircle size={14} /> View Soroban Spending Policy on Stellar Expert
+          </a>
+        </div>
       </div>
     </div>
   );

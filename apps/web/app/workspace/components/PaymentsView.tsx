@@ -53,60 +53,70 @@ export function PaymentsView() {
   }
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "var(--s6) var(--s8)" }}>
-
-      {/* Header with session toggle */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s6)", flexWrap: "wrap", gap: "var(--s3)" }}>
-        <div>
-          <h2 className="h3" style={{ marginBottom: "var(--s1)" }}>Payment Ledger</h2>
-          <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-            {showAll
-              ? "All sessions · Stellar Testnet"
-              : `Session: ${session?.id ?? "—"} · Stellar Testnet`
-            }
+    <div style={{ 
+      flex: 1, 
+      overflowY: "auto", 
+      padding: "var(--s12) var(--s8)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center"
+    }}>
+      <div style={{ maxWidth: 900, width: "100%" }}>
+        {/* Header with session toggle */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s8)", flexWrap: "wrap", gap: "var(--s3)" }}>
+          <div>
+            <h2 className="h2" style={{ marginBottom: "var(--s1)" }}>Payment Ledger</h2>
+            <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
+              {showAll
+                ? "All sessions · Stellar Testnet"
+                : `Session: ${session?.id ?? "—"} · Stellar Testnet`
+              }
+            </div>
           </div>
+          <button
+            onClick={() => setShowAll(v => !v)}
+            className="btn btn-secondary"
+            style={{ fontSize: "0.75rem", padding: "8px 16px" }}
+          >
+            {showAll ? "Show current session" : "Show all sessions"}
+          </button>
         </div>
-        <button
-          onClick={() => setShowAll(v => !v)}
-          className="btn btn-secondary"
-          style={{ fontSize: "0.75rem" }}
-        >
-          {showAll ? "Show current session" : "Show all sessions"}
-        </button>
-      </div>
 
-      {/* Summary strip */}
-      <div style={{ display: "flex", gap: "var(--s3)", marginBottom: "var(--s6)", flexWrap: "wrap" }}>
-        {[
-          { label: "Transactions", value: transactions.length },
-          { label: "Total Spent", value: `$${totalSpent.toFixed(4)}` },
-          { label: "Success Rate", value: `${successRate}%` },
-        ].map(s => (
-          <div key={s.label} style={{
-            flex: 1, minWidth: 120,
-            background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
-            borderRadius: "var(--r-lg)", padding: "var(--s4) var(--s5)",
+        {/* Summary strip */}
+        <div style={{ display: "flex", gap: "var(--s4)", marginBottom: "var(--s10)", flexWrap: "wrap" }}>
+          {[
+            { label: "Transactions", value: transactions.length },
+            { label: "Total Spent", value: `$${totalSpent.toFixed(4)}` },
+            { label: "Success Rate", value: `${successRate}%` },
+          ].map(s => (
+            <div key={s.label} style={{
+              flex: 1, minWidth: 160,
+              background: "var(--bg-surface)", border: "1px solid var(--border-dim)",
+              borderRadius: "var(--r-xl)", padding: "var(--s5) var(--s6)",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+            }}>
+              <div className="caption" style={{ marginBottom: "var(--s1)", fontSize: "0.625rem" }}>{s.label}</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.25rem", fontWeight: 700, color: "var(--text)" }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {transactions.length === 0 ? (
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "center", height: 300, gap: "var(--s4)", color: "var(--text-muted)",
+            background: "var(--bg-surface)", borderRadius: "var(--r-2xl)", border: "1px solid var(--border-dim)"
           }}>
-            <div className="caption" style={{ marginBottom: "var(--s1)" }}>{s.label}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.125rem", fontWeight: 700 }}>{s.value}</div>
+            <CreditCard size={48} strokeWidth={1} />
+            <p className="body-lg">No transactions found</p>
+            <p className="body" style={{ marginTop: "-8px" }}>Run an agent task to generate verifiable payments.</p>
           </div>
-        ))}
-      </div>
-
-      {transactions.length === 0 ? (
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "center",
-          justifyContent: "center", height: 200, gap: "var(--s3)", color: "var(--text-muted)",
-        }}>
-          <CreditCard size={32} strokeWidth={1.5} />
-          <p className="body">No transactions yet. Run an agent task to see payments here.</p>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--s2)" }}>
-          <div className="caption" style={{ marginBottom: "var(--s3)" }}>
-            Transaction History · {transactions.length} record{transactions.length !== 1 ? "s" : ""}
-          </div>
-          {transactions.map((tx, i) => {
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--s3)" }}>
+            <div className="caption" style={{ marginBottom: "var(--s2)", paddingLeft: "var(--s2)" }}>
+              Transaction History · {transactions.length} record{transactions.length !== 1 ? "s" : ""}
+            </div>
+            {transactions.map((tx, i) => {
             const Icon = TOOL_ICON[tx.tool_name] ?? Zap;
             const color = TOOL_COLOR[tx.tool_name] ?? "var(--text-muted)";
             const cleanHash = tx.tx_hash?.replace("stellar:", "") ?? null;
@@ -186,6 +196,7 @@ export function PaymentsView() {
           })}
         </div>
       )}
+      </div>
     </div>
   );
 }
