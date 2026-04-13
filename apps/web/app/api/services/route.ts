@@ -20,6 +20,9 @@ export interface ServiceEntry {
   inputParam: string;
   stellarNetwork: string;
   spendingPolicyContract: string;
+  rating: number;
+  ratingCount: number;
+  providerSplitPercentage: number;
 }
 
 export async function GET(_req: Request): Promise<NextResponse> {
@@ -36,19 +39,28 @@ export async function GET(_req: Request): Promise<NextResponse> {
     inputParam: s.input_param,
     stellarNetwork: s.stellar_network,
     spendingPolicyContract: s.spending_policy_contract,
+    rating: s.rating,
+    ratingCount: s.rating_count,
+    providerSplitPercentage: s.provider_split_percentage,
   }));
+
+  // Deterministic sorting based on score = cost * (1 - rating/5). Lower is better.
+  services.sort((a, b) => {
+    const scoreA = a.priceUsd * (1 - (a.rating || 0) / 5);
+    const scoreB = b.priceUsd * (1 - (b.rating || 0) / 5);
+    return scoreA - scoreB;
+  });
 
   return NextResponse.json(
     {
       services: services,
       totalServices: services.length,
-      cheapest: services[0],
+      bestValue: services[0], // Formerly cheapest, now best value
       network: "stellar:testnet",
       paymentProtocols: ["x402", "mpp"],
       agentHint:
-        "Choose the cheapest service that satisfies the task. " +
-        "Prefer search ($0.01) for information retrieval. " +
-        "Only use summarize ($0.02) or analyze ($0.03) if explicitly required. " +
+        "Choose the service that provides the best combination of cost and reliability score. " +
+        "Services are already sorted by the optimal score = cost * (1 - rating/5). " +
         "All payments are real USDC on Stellar testnet via x402.",
     },
     {
@@ -63,7 +75,7 @@ export async function GET(_req: Request): Promise<NextResponse> {
 export async function POST(req: Request): Promise<NextResponse> {
   try {
     const body = await req.json();
-    const { name, price_usd, endpoint, description, protocol, method, input_param } = body;
+    const { name, price_usd, endpoint, description, protocol, method, input_param, provider_split_percentage } = body;
 
     if (!name || !price_usd || !endpoint) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -78,8 +90,9 @@ export async function POST(req: Request): Promise<NextResponse> {
       method: method || "POST",
       input_param: input_param || "text",
       stellar_network: "stellar:testnet",
-      spending_policy_contract: "none", // External services might not use our policy
+      spending_policy_contract: "none",
       is_external: true,
+      provider_split_percentage: provider_split_percentage ? parseFloat(provider_split_percentage) : 0.7,
     });
 
     return NextResponse.json(service, { status: 201 });
