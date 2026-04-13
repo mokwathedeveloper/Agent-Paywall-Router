@@ -58,11 +58,14 @@ function findAnyStellarAddress(obj: unknown, depth = 0): string | null {
 }
 
 export function extractPayerAddressFromPaymentPayload(paymentPayload: unknown): string {
+  console.log("[Soroban] Extracting payer from payload:", JSON.stringify(paymentPayload, null, 2));
   const preferred = findByPreferredKeys(paymentPayload);
   const fallback = preferred ?? findAnyStellarAddress(paymentPayload);
   if (!fallback) {
+    console.error("[Soroban] Failed to extract payer address from payload keys.");
     throw new Error("Unable to extract payer address from x402 payment payload.");
   }
+  console.log("[Soroban] Extracted payer:", fallback);
   return fallback;
 }
 
@@ -169,6 +172,14 @@ export async function authorizeSplitSpendingPolicy(
     throw new Error("Missing STELLAR_PRIVATE_KEY for SpendingPolicy authorization.");
   }
 
+  // Ensure addresses are valid before calling nativeToScVal
+  if (!looksLikeStellarAddress(payerAddress)) {
+    throw new Error(`Invalid payer address: ${payerAddress}`);
+  }
+  if (!looksLikeStellarAddress(providerAddress)) {
+    throw new Error(`Invalid provider address: ${providerAddress}`);
+  }
+
   const amountTokenUnits = TOOL_PRICES_TOKEN_UNITS[toolName];
 
   const {
@@ -194,7 +205,7 @@ export async function authorizeSplitSpendingPolicy(
   const scaledPercentage = Math.round(providerPercentage * 100);
 
   // Step 1: Build the unsigned transaction calling record_split_payment
-  const unsignedTx = new TransactionBuilder(account, {
+  let unsignedTx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase: Networks.TESTNET,
   })
@@ -213,24 +224,39 @@ export async function authorizeSplitSpendingPolicy(
   // Step 2: Simulate
   const rpcServer = new rpc.Server("https://soroban-testnet.stellar.org", { timeout: 20000 });
   let sim: Awaited<ReturnType<typeof rpcServer.simulateTransaction>>;
-  let lastSimError: unknown;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      sim = await rpcServer.simulateTransaction(unsignedTx);
-      lastSimError = undefined;
-      break;
-    } catch (e) {
-      lastSimError = e;
-      if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+  try {
+    sim = await rpcServer.simulateTransaction(unsignedTx);
+    
+    // ─── FALLBACK LOGIC ───
+    // If simulation fails because the function is missing, fallback to standard authorize
+    if (rpc.Api.isSimulationError(sim)) {
+      const errorStr = JSON.stringify(sim);
+      if (errorStr.includes("not found") || errorStr.includes("HostError")) {
+        console.warn(`[Soroban] record_split_payment not found on contract. Falling back to authorize().`);
+        unsignedTx = new TransactionBuilder(account, {
+          fee: BASE_FEE,
+          networkPassphrase: Networks.TESTNET,
+        })
+          .addOperation(
+            contract.call(
+              "authorize",
+              nativeToScVal(payerAddress, { type: "address" }),
+              nativeToScVal(amountTokenUnits, { type: "i128" })
+            )
+          )
+          .setTimeout(30)
+          .build();
+        sim = await rpcServer.simulateTransaction(unsignedTx);
+      }
     }
+  } catch (e) {
+    throw e;
   }
-  if (lastSimError !== undefined) throw lastSimError;
-  sim = sim!;
 
   if (!rpc.Api.isSimulationSuccess(sim)) {
     const simErr = sim as unknown as { error?: string; result?: unknown };
     const details = simErr?.error ?? JSON.stringify(simErr?.result ?? sim);
-    throw new Error(`SpendingPolicy.record_split_payment() simulation failed: ${String(details)}`);
+    throw new Error(`SpendingPolicy simulation failed: ${String(details)}`);
   }
 
   // Step 3: Assemble

@@ -231,8 +231,16 @@ async function withSessionLock<T>(sessionId: string, fn: () => Promise<T>): Prom
 export async function recordSpend(sessionId: string, amount: number): Promise<boolean> {
   const now = new Date();
   if (isSupabaseConfigured && supabase) {
-    const { data: rpcData, error: rpcError } = await supabase.rpc("increment_spend", { session_id: sessionId, spend_amount: amount });
+    const { data: rpcData, error: rpcError } = await supabase.rpc("increment_spend", { 
+      session_id: sessionId, 
+      spend_amount: amount // Pass as numeric
+    });
     if (!rpcError && typeof rpcData === "boolean") return rpcData;
+    
+    if (rpcError) {
+      console.error(`[db] recordSpend RPC error for session ${sessionId}:`, rpcError.message);
+    }
+
     const session = await getSession(sessionId);
     if (!session || new Date(session.expires_at) < now || session.used_amount + amount > session.spending_limit) return false;
     const newUsed = session.used_amount + amount;

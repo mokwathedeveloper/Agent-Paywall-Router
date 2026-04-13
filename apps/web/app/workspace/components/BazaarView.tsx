@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, FileText, BarChart3, Zap, X, Trophy, Plus, Globe, Shield, Coins, ArrowRight, Star } from "lucide-react";
+import { Search, FileText, BarChart3, Zap, X, Trophy, Plus, Globe, Shield, Coins, Star, Loader2, CheckCircle2 } from "lucide-react";
 import type { Tool } from "@/lib/store";
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -41,8 +41,9 @@ export function BazaarView({ catalog }: Props) {
   const [ratingTool, setRatingTool] = useState<ServiceEntry | null>(null);
   const [userRating, setUserRating] = useState(5);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [verificationProgress, setVerificationProgress] = useState(0);
 
-  useEffect(() => {
+  const refreshServices = () => {
     fetch("/api/services")
       .then(r => r.json())
       .then(d => {
@@ -50,36 +51,40 @@ export function BazaarView({ catalog }: Props) {
         setBestValueId(d.bestValue?.id ?? null);
       })
       .catch(() => null);
+  };
+
+  useEffect(() => {
+    refreshServices();
   }, []);
 
-  const allServices = [...catalog];
-  services.forEach(s => {
-    const existingIdx = allServices.findIndex(t => t.id === s.id);
-    if (existingIdx === -1) {
-      allServices.push({
-        id: s.id,
-        name: s.name,
-        description: s.description,
-        priceUsd: s.priceUsd,
-        url: s.endpoint,
-        method: s.method as any,
-        protocol: s.protocol,
-        payment: { protocol: s.protocol as any, version: "2.0.0", network: "stellar:testnet", currency: "USDC" },
-        rating: s.rating,
-        ratingCount: s.ratingCount,
-        providerSplitPercentage: s.providerSplitPercentage,
-        provider_address: s.provider_address,
-        asset_address: s.asset_address,
-      } as any);
-    } else {
-      const existing = allServices[existingIdx] as any;
-      existing.rating = s.rating;
-      existing.ratingCount = s.ratingCount;
-      existing.providerSplitPercentage = s.providerSplitPercentage;
-      existing.provider_address = s.provider_address;
-      existing.asset_address = s.asset_address;
-    }
-  });
+  const mergedServices = useMemo(() => {
+    const combined = [...catalog].map(t => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      priceUsd: t.priceUsd,
+      protocol: t.payment?.protocol || "x402",
+      endpoint: t.url,
+      method: t.method,
+      rating: 0,
+      ratingCount: 0,
+    })) as any[];
+
+    services.forEach(s => {
+      const idx = combined.findIndex(t => t.id === s.id);
+      if (idx === -1) {
+        combined.push(s);
+      } else {
+        combined[idx] = { ...combined[idx], ...s };
+      }
+    });
+
+    return combined.sort((a, b) => {
+      const scoreA = a.priceUsd * (1 - (a.rating || 0) / 5);
+      const scoreB = b.priceUsd * (1 - (b.rating || 0) / 5);
+      return scoreA - scoreB;
+    });
+  }, [catalog, services]);
 
   const handleRate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,28 +93,40 @@ export function BazaarView({ catalog }: Props) {
     const formData = new FormData(e.currentTarget as HTMLFormElement);
     const txHash = formData.get("txHash") as string;
     
-    if (!txHash) return alert("Transaction hash is required to verify your purchase.");
+    if (!txHash) return alert("Transaction hash is required.");
 
     setIsSubmittingRating(true);
+    setVerificationProgress(10);
+
+    const timer = setInterval(() => {
+      setVerificationProgress(prev => (prev < 90 ? prev + 15 : prev));
+    }, 600);
+
     try {
       const res = await fetch("/api/services/rate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: ratingTool.id, rating: userRating, txHash })
       });
+      
+      clearInterval(timer);
+      setVerificationProgress(100);
+
       if (res.ok) {
-        alert("Verification successful! Rating updated.");
-        setRatingTool(null);
-        const updatedServicesRes = await fetch("/api/services");
-        const data = await updatedServicesRes.json();
-        setServices(data.services ?? []);
-        setBestValueId(data.bestValue?.id ?? null);
+        setTimeout(() => {
+          setRatingTool(null);
+          setVerificationProgress(0);
+          refreshServices();
+        }, 800);
       } else {
         const error = await res.json();
         alert(`Verification failed: ${error.error}`);
+        setVerificationProgress(0);
       }
     } catch (err) {
+      clearInterval(timer);
       console.error(err);
+      setVerificationProgress(0);
     } finally {
       setIsSubmittingRating(false);
     }
@@ -120,8 +137,7 @@ export function BazaarView({ catalog }: Props) {
     try {
       const res = await fetch(`/api/services?id=${encodeURIComponent(id)}`, { method: "DELETE" });
       if (res.ok) {
-        setServices(services.filter(s => s.id !== id));
-        if (bestValueId === id) setBestValueId(null);
+        refreshServices();
       } else {
         const error = await res.json();
         alert(error.error || "Failed to delete");
@@ -135,19 +151,30 @@ export function BazaarView({ catalog }: Props) {
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-deep)", position: "relative", overflow: "hidden" }}>
       {/* Sticky Header */}
       <div style={{ padding: "var(--s6) var(--s8)", borderBottom: "1px solid var(--border-dim)", background: "rgba(9, 9, 11, 0.8)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h2 className="h2" style={{ marginBottom: "var(--s1)", fontSize: "1.5rem" }}>The Tool Bazaar</h2>
-          <p className="body" style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>Agent-native marketplace for Stellar x402 services.</p>
-        </div>
-        {services.length > 0 && (
-          <div style={{ padding: "var(--s3) var(--s5)", background: "var(--indigo-dim)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: "var(--r-lg)", fontSize: "0.75rem", color: "var(--text-body)", maxWidth: "400px", display: "flex", gap: "var(--s3)", alignItems: "center" }}>
-            <Zap size={16} color="var(--indigo)" style={{ flexShrink: 0 }} />
-            <div>
-              <span style={{ fontWeight: 700, color: "var(--indigo)" }}>AGENT HINT: </span>
-              {`Selected ${services[0].name} ($${services[0].priceUsd.toFixed(2)}) as optimal entry point based on cost and reputation.`}
-            </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--s6)" }}>
+          <div>
+            <h2 className="h2" style={{ marginBottom: "var(--s1)", fontSize: "1.5rem" }}>The Tool Bazaar</h2>
+            <p className="body" style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>Agent-native marketplace for Stellar x402 services.</p>
           </div>
-        )}
+          <button 
+            onClick={refreshServices}
+            className="btn btn-secondary" 
+            style={{ padding: "8px 12px", fontSize: "0.75rem", gap: "var(--s2)" }}
+          >
+            <Loader2 size={14} className={isSubmittingRating ? "spin" : ""} /> Refresh
+          </button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--s4)" }}>
+          {services.length > 0 && (
+            <div style={{ padding: "var(--s3) var(--s5)", background: "var(--indigo-dim)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: "var(--r-lg)", fontSize: "0.75rem", color: "var(--text-body)", maxWidth: "400px", display: "flex", gap: "var(--s3)", alignItems: "center" }}>
+              <Zap size={16} color="var(--indigo)" style={{ flexShrink: 0 }} />
+              <div>
+                <span style={{ fontWeight: 700, color: "var(--indigo)" }}>AGENT HINT: </span>
+                Selected {services[0].name} ($${services[0].priceUsd.toFixed(2)}) as optimal entry based on cost/reputation.
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Scrollable Area */}
@@ -157,12 +184,8 @@ export function BazaarView({ catalog }: Props) {
         <div>
           <div className="caption" style={{ marginBottom: "var(--s5)", display: "flex", alignItems: "center", gap: "var(--s2)" }}><Globe size={14} /> Available Services</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "var(--s5)" }}>
-            {allServices.sort((a: any, b: any) => {
-               const scoreA = a.priceUsd * (1 - (a.rating || 0) / 5);
-               const scoreB = b.priceUsd * (1 - (b.rating || 0) / 5);
-               return scoreA - scoreB;
-            }).map((tool: any) => {
-              const isMpp = tool.payment?.protocol === "mpp";
+            {mergedServices.map((tool: any) => {
+              const isMpp = tool.protocol === "mpp";
               const bgColor = isMpp ? "var(--indigo-dim)" : tool.id === "analyze" ? "var(--amber-dim)" : "var(--emerald-dim)";
               const isDefault = ["search", "summarize", "analyze", "weather"].includes(tool.id);
 
@@ -180,13 +203,11 @@ export function BazaarView({ catalog }: Props) {
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--s1)" }}>
                       <h3 className="h3" style={{ fontSize: "1.125rem", margin: 0 }}>{tool.name}</h3>
-                      {tool.rating !== undefined && (
-                        <div title={`Rated ${tool.rating.toFixed(1)} stars from ${tool.ratingCount} reviews`} style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.75rem", fontWeight: 600, cursor: "help" }}>
-                          <Star size={12} fill="currentColor" />
-                          <span>{tool.rating.toFixed(1)}</span>
-                          <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>({tool.ratingCount})</span>
-                        </div>
-                      )}
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.75rem", fontWeight: 600 }}>
+                        <Star size={12} fill="currentColor" />
+                        <span>{(tool.rating || 0).toFixed(1)}</span>
+                        <span style={{ color: "var(--text-muted)", fontWeight: 700 }}>({tool.ratingCount || 0})</span>
+                      </div>
                     </div>
                     <p className="body" style={{ fontSize: "0.875rem", height: "3.2em", overflow: "hidden" }}>{tool.description}</p>
                   </div>
@@ -196,16 +217,9 @@ export function BazaarView({ catalog }: Props) {
                       <div className="cost" style={{ fontSize: "1.125rem" }}>${tool.priceUsd.toFixed(2)}</div>
                     </div>
                     <div style={{ display: "flex", gap: "var(--s2)", alignItems: "center" }}>
-                      <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "6px 12px" }} onClick={() => {
-                        setRatingTool(tool);
-                        setUserRating(5);
-                      }}>Rate</button>
+                      <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "6px 12px" }} onClick={() => setRatingTool(tool)}>Rate</button>
                       <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "6px 12px" }} onClick={() => setSpecTool(tool)}>View Spec</button>
-                      {!isDefault && (
-                        <button title="Remove Service" className="btn btn-ghost" style={{ padding: "6px", color: "var(--rose)" }} onClick={() => handleDelete(tool.id)}>
-                          <X size={14} />
-                        </button>
-                      )}
+                      {!isDefault && <button className="btn btn-ghost" style={{ padding: "6px", color: "var(--rose)" }} onClick={() => handleDelete(tool.id)}><X size={14} /></button>}
                     </div>
                   </div>
                 </motion.div>
@@ -214,8 +228,8 @@ export function BazaarView({ catalog }: Props) {
           </div>
         </div>
 
-        {/* Discovery Info Box */}
-        <div title="Score = Price * (1 - Rating / 5)" style={{ cursor: "help", padding: "var(--s6)", background: "var(--bg-surface)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-xl)", display: "flex", alignItems: "center", gap: "var(--s6)" }}>
+        {/* Info Box */}
+        <div style={{ padding: "var(--s6)", background: "var(--bg-surface)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-xl)", display: "flex", alignItems: "center", gap: "var(--s6)" }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--emerald-dim)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Shield size={24} color="var(--emerald)" /></div>
           <div>
             <h4 style={{ fontWeight: 600, marginBottom: 4 }}>Deterministic Discovery Active</h4>
@@ -223,12 +237,12 @@ export function BazaarView({ catalog }: Props) {
           </div>
         </div>
 
-        {/* Professional Centered Provider Form */}
+        {/* Provider Form */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "var(--s16) var(--s8)", background: "linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-card) 100%)", borderTop: "1px solid var(--border-dim)", textAlign: "center" }}>
           <div style={{ maxWidth: "640px", width: "100%" }}>
             <div className="badge badge-indigo" style={{ marginBottom: "var(--s4)", padding: "4px 12px" }}>PROVIDER PROGRAM</div>
-            <h2 className="h2" style={{ marginBottom: "var(--s3)", fontSize: "2.25rem", letterSpacing: "-0.02em" }}>Become a Service Provider</h2>
-            <p className="body-lg" style={{ marginBottom: "var(--s10)", color: "var(--text-body)" }}>Join the agent-to-agent economy. List your AI service, set your price, and receive automated USDC payments on Stellar.</p>
+            <h2 className="h2" style={{ marginBottom: "var(--s3)", fontSize: "2.25rem" }}>Become a Service Provider</h2>
+            <p className="body-lg" style={{ marginBottom: "var(--s10)", color: "var(--text-body)" }}>Join the machine economy. List your service and receive USDC payments on Stellar.</p>
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
@@ -236,29 +250,25 @@ export function BazaarView({ catalog }: Props) {
                 const data = Object.fromEntries(formData);
                 try {
                   const res = await fetch("/api/services", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-                  if (res.ok) { alert("Service registered successfully!"); window.location.reload(); }
-                } catch (err) { alert("Failed to register service."); }
+                  if (res.ok) { alert("Service registered!"); window.location.reload(); }
+                } catch (err) { alert("Failed to register."); }
               }}
-              style={{ display: "flex", flexDirection: "column", gap: "var(--s6)", background: "var(--bg-surface)", padding: "var(--s10)", borderRadius: "var(--r-2xl)", border: "1px solid var(--border-strong)", boxShadow: "0 32px 64px -12px rgba(0,0,0,0.6)", textAlign: "left" }}
+              style={{ display: "flex", flexDirection: "column", gap: "var(--s6)", background: "var(--bg-surface)", padding: "var(--s10)", borderRadius: "var(--r-2xl)", border: "1px solid var(--border-strong)", textAlign: "left" }}
             >
-              <div><div className="caption" style={{ marginBottom: "var(--s2)", color: "var(--text-muted)" }}>Service Identity</div><input name="name" className="input" placeholder="e.g. GPT-4o Summarizer" style={{ fontSize: "1.125rem", fontWeight: 500 }} required /></div>
+              <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Service Identity</div><input name="name" className="input" placeholder="e.g. GPT-4o Summarizer" required /></div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s4)" }}>
-                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Price (USDC)</div><div style={{ position: "relative" }}><div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "var(--emerald)", fontWeight: 600 }}>$</div><input name="price_usd" className="input" placeholder="0.05" style={{ paddingLeft: "2.5rem" }} required /></div></div>
-                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Protocol</div><select name="protocol" className="input" style={{ appearance: "none", cursor: "pointer" }}><option value="x402">x402 (Standard)</option><option value="mpp">MPP (Session)</option></select></div>
+                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Price (USDC)</div><input name="price_usd" className="input" placeholder="0.05" required /></div>
+                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Protocol</div><select name="protocol" className="input"><option value="x402">x402</option><option value="mpp">MPP</option></select></div>
               </div>
-              <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>API Endpoint URL</div><input name="endpoint" className="input" placeholder="https://api.yourdomain.com/v1/task" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required /></div>
+              <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>API Endpoint URL</div><input name="endpoint" className="input" placeholder="https://api.yourdomain.com/v1/task" required /></div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s4)" }}>
-                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Provider Wallet Address</div><input name="provider_address" className="input" placeholder="G..." style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required /></div>
-                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Asset Issuer (Testnet)</div><input name="asset_address" className="input" placeholder="CBIELTK6..." defaultValue="CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required /></div>
+                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Provider Wallet</div><input name="provider_address" className="input" placeholder="G..." required /></div>
+                <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Asset Issuer</div><input name="asset_address" className="input" defaultValue="CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA" required /></div>
               </div>
-              <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Description</div><textarea name="description" className="input" placeholder="What does your tool do? (shown to agents)" style={{ minHeight: "120px", resize: "none", lineHeight: 1.5 }} required /></div>
-              <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Provider Split Percentage (e.g., 0.7 for 70%)</div><input name="provider_split_percentage" className="input" placeholder="0.7" defaultValue="0.7" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required /></div>
-              <button type="submit" className="btn btn-primary" style={{ padding: "var(--s4)", fontSize: "1rem", borderRadius: "var(--r-xl)", marginTop: "var(--s2)" }}><Plus size={20} /> Register My Service</button>
+              <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Description</div><textarea name="description" className="input" placeholder="What does your tool do?" style={{ minHeight: "100px" }} required /></div>
+              <div><div className="caption" style={{ marginBottom: "var(--s2)" }}>Provider Split Percentage (e.g., 0.7 for 70%)</div><input name="provider_split_percentage" className="input" placeholder="0.7" defaultValue="0.7" required /></div>
+              <button type="submit" className="btn btn-primary" style={{ padding: "var(--s4)" }}><Plus size={20} /> Register My Service</button>
             </form>
-            <div style={{ marginTop: "var(--s8)", display: "flex", alignItems: "center", justifyContent: "center", gap: "var(--s2)", color: "var(--text-dim)", fontSize: "0.875rem" }}>
-              <span>Need help?</span>
-              <a href="https://github.com/mokwathedeveloper/Agent-Paywall-Router#integration-guide" target="_blank" rel="noopener noreferrer" style={{ color: "var(--emerald)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textDecoration: "underline", cursor: "pointer", position: "relative", zIndex: 2 }}>Read the Integration Guide <ArrowRight size={14} /></a>
-            </div>
           </div>
         </div>
       </div>
@@ -271,26 +281,42 @@ export function BazaarView({ catalog }: Props) {
               <div style={{ textAlign: "center", marginBottom: "var(--s6)" }}>
                 <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--amber-dim)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto var(--s4)" }}><Star size={28} color="var(--amber)" fill="var(--amber)" /></div>
                 <h3 className="h2" style={{ fontSize: "1.5rem" }}>Rate {ratingTool.name}</h3>
-                <p className="body" style={{ color: "var(--text-muted)" }}>Share your experience with this agent service.</p>
+                <p className="body" style={{ color: "var(--text-muted)" }}>Verification of Stellar payment is required.</p>
               </div>
-              <form onSubmit={handleRate} style={{ display: "flex", flexDirection: "column", gap: "var(--s6)" }}>
-                <div style={{ display: "flex", justifyContent: "center", gap: "var(--s2)" }}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button key={star} type="button" onClick={() => setUserRating(star)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
-                      <Star size={36} fill={star <= userRating ? "var(--amber)" : "none"} color={star <= userRating ? "var(--amber)" : "var(--text-muted)"} />
-                    </button>
-                  ))}
+
+              {isSubmittingRating ? (
+                <div style={{ textAlign: "center", padding: "var(--s10) 0" }}>
+                  <div style={{ marginBottom: "var(--s4)", fontWeight: 600, color: "var(--text)" }}>Verifying Purchase on Stellar...</div>
+                  <div className="progress" style={{ height: 8, marginBottom: "var(--s4)" }}>
+                    <motion.div className="progress-fill" style={{ width: `${verificationProgress}%`, background: "var(--emerald)" }} />
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>This usually takes 3-5 seconds.</div>
                 </div>
-                <div>
-                  <div className="caption" style={{ marginBottom: "var(--s2)" }}>Verification Transaction Hash</div>
-                  <input name="txHash" className="input" placeholder="stellar:..." required style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }} />
-                  <p style={{ fontSize: "0.625rem", color: "var(--text-dim)", marginTop: "var(--s2)" }}>To prevent fake reviews, ratings require a valid Stellar payment hash for this service.</p>
+              ) : verificationProgress === 100 ? (
+                <div style={{ textAlign: "center", padding: "var(--s10) 0" }}>
+                  <CheckCircle2 size={48} color="var(--emerald)" style={{ margin: "0 auto var(--s4)" }} />
+                  <div style={{ fontWeight: 700, fontSize: "1.25rem", color: "var(--emerald)" }}>Verified!</div>
                 </div>
-                <div style={{ display: "flex", gap: "var(--s3)" }}>
-                  <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setRatingTool(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={isSubmittingRating}>{isSubmittingRating ? "Verifying..." : "Submit Rating"}</button>
-                </div>
-              </form>
+              ) : (
+                <form onSubmit={handleRate} style={{ display: "flex", flexDirection: "column", gap: "var(--s6)" }}>
+                  <div style={{ display: "flex", justifyContent: "center", gap: "var(--s2)" }}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button key={star} type="button" onClick={() => setUserRating(star)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+                        <Star size={36} fill={star <= userRating ? "var(--amber)" : "none"} color={star <= userRating ? "var(--amber)" : "var(--text-muted)"} />
+                      </button>
+                    ))}
+                  </div>
+                  <div>
+                    <div className="caption" style={{ marginBottom: "var(--s2)" }}>Verification Transaction Hash</div>
+                    <input name="txHash" className="input" placeholder="stellar:..." required style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }} />
+                    <p style={{ fontSize: "0.625rem", color: "var(--text-dim)", marginTop: "var(--s2)" }}>Enter the Stellar transaction hash of your successful payment.</p>
+                  </div>
+                  <div style={{ display: "flex", gap: "var(--s3)" }}>
+                    <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setRatingTool(null)}>Cancel</button>
+                    <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>Submit Rating</button>
+                  </div>
+                </form>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -306,7 +332,7 @@ export function BazaarView({ catalog }: Props) {
                   <div style={{ width: 40, height: 40, borderRadius: "var(--r-md)", background: "var(--emerald-dim)", display: "flex", alignItems: "center", justifyContent: "center" }}><Coins size={20} color="var(--emerald)" /></div>
                   <div>
                     <h3 style={{ fontWeight: 700, fontSize: "1.25rem", margin: 0 }}>{specTool.name}</h3>
-                    <span className="caption" style={{ color: "var(--emerald)" }}>{specTool.payment?.protocol === "mpp" ? "MPP" : "x402"} Verified Tool</span>
+                    <span className="caption" style={{ color: "var(--emerald)" }}>{specTool.protocol.toUpperCase()} Verified Tool</span>
                   </div>
                 </div>
                 <button onClick={() => setSpecTool(null)} aria-label="Close" style={{ width: 36, height: 36, borderRadius: "var(--r-full)", background: "var(--bg-hover)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", transition: "all 0.2s ease" }}><X size={20} /></button>
@@ -322,11 +348,11 @@ export function BazaarView({ catalog }: Props) {
                 </div>
                 <div style={{ marginBottom: "var(--s6)", padding: "var(--s4)", background: "var(--bg-deep)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-md)", display: "flex", alignItems: "center", gap: "var(--s4)" }}>
                    <div style={{ flex: 1 }}><div className="caption" style={{ marginBottom: "var(--s1)", color: "var(--text-muted)" }}>Economic Model</div><div style={{ fontSize: "0.875rem", color: "var(--text-body)" }}><span style={{ fontWeight: 600, color: "var(--emerald)" }}>{((specTool as any).providerSplitPercentage ?? 0.7) * 100}%</span> Revenue Split to Provider</div></div>
-                   <div style={{ flex: 1, borderLeft: "1px solid var(--border-dim)", paddingLeft: "var(--s4)" }}><div className="caption" style={{ marginBottom: "var(--s1)", color: "var(--text-muted)" }}>Reputation</div><div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.875rem", fontWeight: 600 }}><Star size={14} fill="currentColor" /><span>{(specTool as any).rating ? (specTool as any).rating.toFixed(1) : "New"}</span><span style={{ color: "var(--text-muted)", fontWeight: 400 }}>({(specTool as any).ratingCount ?? 0} reviews)</span></div></div>
+                   <div style={{ flex: 1, borderLeft: "1px solid var(--border-dim)", paddingLeft: "var(--s4)" }}><div className="caption" style={{ marginBottom: "var(--s1)", color: "var(--text-muted)" }}>Reputation</div><div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontSize: "0.875rem", fontWeight: 600 }}><Star size={14} fill="currentColor" /><span>{(specTool as any).rating ? (specTool as any).rating.toFixed(1) : "New"}</span><span style={{ color: "var(--text-muted)", fontWeight: 700 }}>({(specTool as any).ratingCount ?? 0} reviews)</span></div></div>
                 </div>
                 <div style={{ marginBottom: "var(--s6)" }}>
                   <div className="caption" style={{ marginBottom: "var(--s3)" }}>Endpoint</div>
-                  <code style={{ display: "block", padding: "var(--s4)", background: "var(--bg-deep)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-md)", fontSize: "0.875rem", color: "var(--emerald)", fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>{specTool.method} {specTool.url}</code>
+                  <code style={{ display: "block", padding: "var(--s4)", background: "var(--bg-deep)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-md)", fontSize: "0.875rem", color: "var(--emerald)", fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>{specTool.method} {(specTool as any).endpoint || (specTool as any).url}</code>
                 </div>
                 <div style={{ marginBottom: "var(--s8)" }}>
                   <div className="caption" style={{ marginBottom: "var(--s3)" }}>Description</div>
@@ -335,7 +361,7 @@ export function BazaarView({ catalog }: Props) {
                 <div>
                   <div className="caption" style={{ marginBottom: "var(--s3)" }}>x402 Protocol Implementation</div>
                   <pre style={{ padding: "var(--s5)", background: "var(--bg-deep)", border: "1px solid var(--border-dim)", borderRadius: "var(--r-xl)", fontSize: "0.8125rem", color: "var(--text-body)", fontFamily: "var(--font-mono)", whiteSpace: "pre-wrap", wordBreak: "break-all", lineHeight: 1.6, margin: 0 }}>
-                    {JSON.stringify({ x402Version: 2, resource: { url: specTool.url }, accepts: [{ scheme: "exact", network: specTool.payment?.network ?? "stellar:testnet", asset: specTool.payment?.currency ?? "USDC", amount: String(Math.round(specTool.priceUsd * 10_000_000)), payTo: (specTool as any).provider_address || "<RECEIVER_ADDRESS>", facilitator: "https://x402.org/facilitator", extra: { areFeesSponsored: true } }] }, null, 2)}
+                    {JSON.stringify({ x402Version: 2, resource: { url: (specTool as any).endpoint || (specTool as any).url }, accepts: [{ scheme: "exact", network: specTool.payment?.network ?? "stellar:testnet", asset: (specTool as any).asset_address || "USDC", amount: String(Math.round(specTool.priceUsd * 10_000_000)), payTo: (specTool as any).provider_address || "<RECEIVER_ADDRESS>", facilitator: "https://x402.org/facilitator", extra: { areFeesSponsored: true } }] }, null, 2)}
                   </pre>
                 </div>
               </div>

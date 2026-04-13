@@ -32,7 +32,11 @@ type X402RouteConfig = {
   };
 };
 
-type X402Route = "GET /api/tools/search" | "POST /api/tools/summarize" | "POST /api/tools/analyze";
+type X402Route = 
+  | "GET /api/tools/search" 
+  | "POST /api/tools/summarize" 
+  | "POST /api/tools/analyze"
+  | "GET /api/tools/weather";
 
 // x402 verified result shape returned by processHTTPRequest
 type X402VerifiedResult = {
@@ -104,6 +108,24 @@ const ROUTES: Record<X402Route, X402RouteConfig> = {
       asset: USDC_TESTNET_ADDRESS,
       payTo: RECEIVER_ADDRESS,
       price: { asset: USDC_TESTNET_ADDRESS, amount: TOOL_PRICES_TOKEN_UNITS.analyze },
+      extra: { areFeesSponsored: true },
+      maxTimeoutSeconds: 60,
+    },
+  },
+  "GET /api/tools/weather": {
+    resource: "/api/tools/weather",
+    description: "Paid tool: weather",
+    mimeType: "application/json",
+    unpaidResponseBody: async () => ({
+      contentType: "application/json",
+      body: { error: "Payment Required" },
+    }),
+    accepts: {
+      scheme: "exact",
+      network: STELLAR_NETWORK,
+      asset: USDC_TESTNET_ADDRESS,
+      payTo: RECEIVER_ADDRESS,
+      price: { asset: USDC_TESTNET_ADDRESS, amount: TOOL_PRICES_TOKEN_UNITS.weather },
       extra: { areFeesSponsored: true },
       maxTimeoutSeconds: 60,
     },
