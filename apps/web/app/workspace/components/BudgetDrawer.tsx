@@ -128,7 +128,7 @@ export function BudgetDrawer({ summary }: Props) {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s4)" }}>
+      <div title="Global session spending limit. Agent stops if exceeded." style={{ cursor: "help", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s4)" }}>
         <div className="caption" style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
           <Wallet size={13} /> Budget
         </div>
