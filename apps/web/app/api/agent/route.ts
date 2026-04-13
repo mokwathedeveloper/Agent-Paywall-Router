@@ -159,7 +159,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             addStep("search (cached)", "success", "search", 0, `Reusing cached result for: ${query}`);
             return callCache.get(cacheKey)!;
           }
-          const result = await executeToolWithPayment("search", { query }, sessionId!, addStep);
+          const result = await executeToolWithPayment("search", { query }, sessionId!, addStep, services);
           callCache.set(cacheKey, result);
           return result;
         },
@@ -178,7 +178,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             addStep("summarize (cached)", "success", "summarize", 0, "Reusing cached result");
             return callCache.get(cacheKey)!;
           }
-          const result = await executeToolWithPayment("summarize", { text }, sessionId!, addStep);
+          const result = await executeToolWithPayment("summarize", { text }, sessionId!, addStep, services);
           callCache.set(cacheKey, result);
           return result;
         },
@@ -197,7 +197,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             addStep("analyze (cached)", "success", "analyze", 0, "Reusing cached result");
             return callCache.get(cacheKey)!;
           }
-          const result = await executeToolWithPayment("analyze", { text }, sessionId!, addStep);
+          const result = await executeToolWithPayment("analyze", { text }, sessionId!, addStep, services);
+          callCache.set(cacheKey, result);
+          return result;
+        },
+      },
+      weather: {
+        description: "Get real-time global weather data including temperature, conditions, and forecasts for a location.",
+        inputSchema: jsonSchema<{ location: string }>({
+          type: "object",
+          properties: { location: { type: "string", description: "The city or location name" } },
+          required: ["location"],
+          additionalProperties: false,
+        }),
+        execute: async ({ location }: { location: string }) => {
+          const cacheKey = `weather:${location.toLowerCase().trim()}`;
+          if (callCache.has(cacheKey)) {
+            addStep("weather (cached)", "success", "weather", 0, `Reusing cached result for: ${location}`);
+            return callCache.get(cacheKey)!;
+          }
+          const result = await executeToolWithPayment("weather", { location }, sessionId!, addStep, services);
           callCache.set(cacheKey, result);
           return result;
         },
@@ -305,10 +324,11 @@ async function executeToolWithPayment(
   toolName: ToolName,
   args: Record<string, string>,
   sessionId: string,
-  addStep: (action: string, status: AgentStep["status"], tool: string | null, cost: number, detail: string) => void
+  addStep: (action: string, status: AgentStep["status"], tool: string | null, cost: number, detail: string) => void,
+  services: ServiceEntry[]
 ): Promise<{ data: unknown; txHash: string }> {
   const price = TOOL_PRICES[toolName] || 0.01;
-  const toolInput = toolName === "search" ? args.query ?? args.text ?? "" : args.text ?? "";
+  const toolInput = toolName === "search" ? args.query ?? args.text ?? "" : args.text ?? args.location ?? "";
   requireSafeInput(String(toolInput));
 
   const budgetOk = await canSpend(sessionId, price);
@@ -349,9 +369,12 @@ async function executeToolWithPayment(
       console.warn(`[db] recordSpend returned false for session ${sessionId} — session may have been recreated after restart. Continuing.`);
     }
 
-    // Revenue Split (70% Provider, 30% Agent)
-    const providerShare = price * 0.7;
-    const agentShare = price * 0.3;
+    // Dynamic Revenue Split based on the service config
+    const serviceConfig = services.find(s => s.id === toolName);
+    const splitPercentage = serviceConfig?.providerSplitPercentage ?? 0.7; // default 70% to provider
+    
+    const providerShare = price * splitPercentage;
+    const agentShare = price * (1 - splitPercentage);
 
     await addTransaction({
       session_id: sessionId,
