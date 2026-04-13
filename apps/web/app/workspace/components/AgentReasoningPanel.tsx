@@ -121,7 +121,8 @@ export function AgentReasoningPanel({ marketplace, txHash, isExecuting, steps }:
 
           {/* Revenue Split Reasoning */}
           {marketplace && (
-            <div style={{
+            <div title="Revenue is split between the API Provider and the Protocol" style={{
+              cursor: "help",
               display: "flex", alignItems: "flex-start", gap: "var(--s3)",
               padding: "var(--s3) var(--s4)", background: "var(--bg-deep)",
               borderRadius: "var(--r-lg)", border: "1px solid var(--border-dim)",
