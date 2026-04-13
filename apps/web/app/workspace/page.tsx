@@ -43,8 +43,8 @@ export default function WorkspacePage() {
   const [initError, setInitError] = useState<string | null>(null);
   const [marketplace, setMarketplace] = useState<{
     servicesDiscovered: number;
-    cheapestService: string;
-    cheapestPriceUsd: number;
+    bestValueService: string;
+    bestValuePriceUsd: number;
     txExplorerLink: string | null;
     policyExplorerLink: string | null;
   } | null>(null);
