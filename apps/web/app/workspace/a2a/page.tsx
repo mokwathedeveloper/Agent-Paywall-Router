@@ -199,11 +199,33 @@ export default function A2APage() {
               </div>
             ) : (
               <>
-                <div style={{ fontWeight: 700, marginBottom: "var(--s2)", fontSize: "0.875rem", display: "flex", alignItems: "center", gap: "var(--s2)" }}>
+                <div style={{ fontWeight: 700, marginBottom: "var(--s4)", fontSize: "0.875rem", display: "flex", alignItems: "center", gap: "var(--s2)" }}>
                   <ShieldCheck size={14} color="var(--emerald)" />
                   Result retrieved autonomously:
                 </div>
-                <pre style={{ fontSize: "0.75rem", color: "var(--text-dim)", overflow: "auto" }}>
+                
+                {/* ─── TRANSACTION PROOF FOR A2A COMMERCE ─── */}
+                {result.result && (result.result as any).proofs?.paymentTxHash && (
+                  <div style={{ marginBottom: "var(--s4)", padding: "var(--s3)", background: "rgba(16,185,129,0.1)", borderRadius: "var(--r-md)", border: "1px solid rgba(16,185,129,0.3)" }}>
+                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--emerald)", marginBottom: 4 }}>
+                      A2A Payment Settled
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-body)", marginBottom: "var(--s2)" }}>
+                      One immutable transaction executed on Stellar. The <strong>Buyer Agent</strong> paid USDC, and the <strong>Provider Agent</strong> (this system) received the revenue split automatically.
+                    </div>
+                    <a
+                      href={`https://stellar.expert/explorer/testnet/tx/${(result.result as any).proofs.paymentTxHash.replace("stellar:", "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-secondary"
+                      style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+                    >
+                      View Single Payer/Provider Hash on Stellar Expert
+                    </a>
+                  </div>
+                )}
+
+                <pre style={{ fontSize: "0.75rem", color: "var(--text-dim)", overflow: "auto", background: "var(--bg-deep)", padding: "var(--s4)", borderRadius: "var(--r-md)", border: "1px solid var(--border-dim)" }}>
                   {JSON.stringify(result.result ?? result, null, 2)}
                 </pre>
               </>
