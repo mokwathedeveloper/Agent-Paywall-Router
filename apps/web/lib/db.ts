@@ -88,6 +88,10 @@ export async function canSpend(sessionId: string, amount: number): Promise<boole
   const session = await getSession(sessionId);
   if (!session) return false;
   if (new Date(session.expires_at) < new Date()) return false;
+  // Sync in-memory cache from Supabase so recordSpend has accurate data
+  if (isSupabaseConfigured && !memSessions.has(sessionId)) {
+    memSessions.set(sessionId, session);
+  }
   return session.used_amount + amount <= session.spending_limit;
 }
 
@@ -118,29 +122,32 @@ export async function recordSpend(sessionId: string, amount: number): Promise<bo
   const now = new Date();
 
   if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.rpc("increment_spend", {
+    // Try the RPC first (atomic increment)
+    const { data: rpcData, error: rpcError } = await supabase.rpc("increment_spend", {
       session_id: sessionId,
       spend_amount: amount,
     });
 
-    if (typeof data === "boolean" && data) return true;
-    if (!error) return false;
+    if (!rpcError && typeof rpcData === "boolean") return rpcData;
 
-    // Fallback (for older DBs without the RPC): optimistic compare-and-set.
+    // RPC not available or failed — use direct update with fresh read
     const session = await getSession(sessionId);
     if (!session) return false;
     if (new Date(session.expires_at) < now) return false;
     if (session.used_amount + amount > session.spending_limit) return false;
 
-    const oldUsed = session.used_amount;
-    const newUsed = oldUsed + amount;
+    const newUsed = session.used_amount + amount;
     const { error: updateErr } = await supabase
       .from("sessions")
       .update({ used_amount: newUsed })
-      .eq("id", sessionId)
-      .eq("used_amount", oldUsed);
+      .eq("id", sessionId);
 
-    if (updateErr) throw updateErr;
+    if (updateErr) {
+      console.error("[db] recordSpend update error:", updateErr.message);
+      return false;
+    }
+    // Keep in-memory cache in sync
+    memSessions.set(sessionId, { ...session, used_amount: newUsed });
     return true;
   }
 
