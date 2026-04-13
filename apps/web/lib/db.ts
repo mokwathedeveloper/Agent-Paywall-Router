@@ -271,9 +271,17 @@ export async function recordSpend(sessionId: string, amount: number): Promise<bo
       spend_amount: amount,
     });
 
-    if (!rpcError && typeof rpcData === "boolean") return rpcData;
+    if (rpcError) {
+      console.error(`[db] recordSpend RPC error for session ${sessionId}:`, rpcError.message);
+    }
+
+    if (!rpcError && typeof rpcData === "boolean") {
+      if (!rpcData) console.warn(`[db] recordSpend RPC returned false for session ${sessionId} (budget exceeded or expired)`);
+      return rpcData;
+    }
 
     // RPC not available or failed — use direct update with fresh read
+    console.log(`[db] Falling back to manual update for session ${sessionId}`);
     const session = await getSession(sessionId);
     if (!session) return false;
     if (new Date(session.expires_at) < now) return false;
@@ -286,7 +294,7 @@ export async function recordSpend(sessionId: string, amount: number): Promise<bo
       .eq("id", sessionId);
 
     if (updateErr) {
-      console.error("[db] recordSpend update error:", updateErr.message);
+      console.error(`[db] recordSpend manual update error for session ${sessionId}:`, updateErr.message);
       return false;
     }
     // Keep in-memory cache in sync
