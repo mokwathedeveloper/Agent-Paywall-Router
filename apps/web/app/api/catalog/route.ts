@@ -24,20 +24,20 @@ export async function GET(req: Request) {
     process.env.NEXT_PUBLIC_BASE_URL ??
     `${req.headers.get("x-forwarded-proto") ?? "https"}://${req.headers.get("host") ?? "localhost:3000"}`;
 
-  const makeX402Spec = (amount: string, path: string) => ({
+  const makeX402Spec = (amount: string, path: string, payTo: string, asset: string) => ({
     protocol: "x402",
     version: X402_VERSION,
     accepts: [{
       scheme: "exact",
       network: "stellar:testnet",
-      asset: USDC_TESTNET_ADDRESS,
+      asset: asset || USDC_TESTNET_ADDRESS,
       amount,
-      payTo: receiver,
+      payTo: payTo || receiver,
       facilitator: process.env.FACILITATOR_URL ?? DEFAULT_FACILITATOR_URL,
       extra: { areFeesSponsored: true },
     }],
     retryWith: "x402-receipt header on retry request",
-    resource: `${baseUrl}${path}`,
+    resource: path.startsWith("http") ? path : `${baseUrl}${path}`,
   });
 
   const dbServices = await import("@/lib/db").then(m => m.getAllServices());
@@ -50,8 +50,8 @@ export async function GET(req: Request) {
     url: s.endpoint.startsWith("http") ? s.endpoint : `${baseUrl}${s.endpoint}`,
     priceUsd: s.price_usd,
     payment: s.protocol === "x402" 
-      ? makeX402Spec(Math.round(s.price_usd * 10_000_000).toString(), s.endpoint)
-      : { protocol: "mpp", version: "0.2.0", network: "stellar:testnet", currency: "USDC", amount_usd: s.price_usd.toString(), recipient: receiver, endpoint: s.endpoint.startsWith("http") ? s.endpoint : `${baseUrl}${s.endpoint}` }
+      ? makeX402Spec(Math.round(s.price_usd * 10_000_000).toString(), s.endpoint, (s as any).provider_address, (s as any).asset_address)
+      : { protocol: "mpp", version: "0.2.0", network: "stellar:testnet", currency: "USDC", amount_usd: s.price_usd.toString(), recipient: (s as any).provider_address || receiver, endpoint: s.endpoint.startsWith("http") ? s.endpoint : `${baseUrl}${s.endpoint}` }
   }));
 
   return NextResponse.json({
