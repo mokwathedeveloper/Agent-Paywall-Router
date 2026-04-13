@@ -38,6 +38,9 @@ const DEFAULT_SERVICES: DBService[] = [
     stellar_network: "stellar:testnet",
     spending_policy_contract: SPENDING_POLICY_CONTRACT_ID,
     is_external: false,
+    rating: 4.8,
+    rating_count: 120,
+    provider_split_percentage: 0.7,
   },
   {
     id: "summarize",
@@ -51,6 +54,9 @@ const DEFAULT_SERVICES: DBService[] = [
     stellar_network: "stellar:testnet",
     spending_policy_contract: SPENDING_POLICY_CONTRACT_ID,
     is_external: false,
+    rating: 4.5,
+    rating_count: 85,
+    provider_split_percentage: 0.7,
   },
   {
     id: "analyze",
@@ -64,6 +70,25 @@ const DEFAULT_SERVICES: DBService[] = [
     stellar_network: "stellar:testnet",
     spending_policy_contract: SPENDING_POLICY_CONTRACT_ID,
     is_external: false,
+    rating: 4.2,
+    rating_count: 50,
+    provider_split_percentage: 0.7,
+  },
+  {
+    id: "weather",
+    name: "Global Weather API",
+    description: "Real-time global weather data including temperature, conditions, and forecasts.",
+    price_usd: 0.05,
+    protocol: "x402",
+    endpoint: "/api/tools/weather",
+    method: "GET",
+    input_param: "location",
+    stellar_network: "stellar:testnet",
+    spending_policy_contract: SPENDING_POLICY_CONTRACT_ID,
+    is_external: false,
+    rating: 5.0,
+    rating_count: 10,
+    provider_split_percentage: 0.8, // Configurable split: 80% to provider
   },
 ];
 
@@ -78,9 +103,15 @@ export async function getAllServices(): Promise<DBService[]> {
   return Array.from(memServices.values()).sort((a, b) => a.price_usd - b.price_usd);
 }
 
-export async function addService(service: Omit<DBService, "id" | "created_at">): Promise<DBService> {
+export async function addService(service: Omit<DBService, "id" | "created_at" | "rating" | "rating_count">): Promise<DBService> {
   const id = genId("svc");
-  const newService: DBService = { ...service, id, created_at: new Date().toISOString() };
+  const newService: DBService = { 
+    ...service, 
+    id, 
+    rating: 0, 
+    rating_count: 0, 
+    created_at: new Date().toISOString() 
+  };
 
   if (isSupabaseConfigured && supabase) {
     const { error } = await supabase.from("services").insert(newService);
@@ -89,6 +120,42 @@ export async function addService(service: Omit<DBService, "id" | "created_at">):
 
   memServices.set(id, newService);
   return newService;
+}
+
+export async function rateService(id: string, newRating: number): Promise<DBService | null> {
+  if (newRating < 1 || newRating > 5) return null;
+
+  if (isSupabaseConfigured && supabase) {
+    // In a real app, we'd use an RPC for atomic updates or a separate ratings table
+    const { data: service } = await supabase.from("services").select("*").eq("id", id).single();
+    if (!service) return null;
+
+    const totalScore = (service.rating * service.rating_count) + newRating;
+    const newCount = service.rating_count + 1;
+    const updatedRating = totalScore / newCount;
+
+    const { data, error } = await supabase
+      .from("services")
+      .update({ rating: updatedRating, rating_count: newCount })
+      .eq("id", id)
+      .select()
+      .single();
+    
+    if (!error && data) {
+      memServices.set(id, data as DBService);
+      return data as DBService;
+    }
+  }
+
+  // In-memory update
+  const service = memServices.get(id);
+  if (!service) return null;
+
+  const totalScore = (service.rating * service.rating_count) + newRating;
+  service.rating_count += 1;
+  service.rating = totalScore / service.rating_count;
+  
+  return service;
 }
 
 // ─── Sessions ───
