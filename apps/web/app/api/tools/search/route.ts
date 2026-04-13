@@ -47,15 +47,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // ─── ON-CHAIN REVENUE SPLITTING ───
   // We explicitly record the 70/30 split on Stellar via Soroban.
   // Payer (Agent) -> Provider (Receiver Wallet)
-  const providerAddress = process.env.STELLAR_RECEIVER_ADDRESS || "";
-  const policy = await authorizeSplitSpendingPolicyForVerifiedPayment(
-    vr.paymentPayload, 
-    "search", 
-    providerAddress, 
-    0.7 // 70% to provider
-  );
-  if (policy instanceof NextResponse) return policy;
+  try {
+    const providerAddress = process.env.STELLAR_RECEIVER_ADDRESS || "";
+    const policy = await authorizeSplitSpendingPolicyForVerifiedPayment(
+      vr.paymentPayload, 
+      "search", 
+      providerAddress, 
+      0.7 // 70% to provider
+    );
+    if (policy instanceof NextResponse) return policy;
 
-  const result = await search(q);
-  return settlePaidToolJsonWithProofs(vr, "search", "$0.01", result as Record<string, unknown>, policy);
+    const result = await search(q);
+    return settlePaidToolJsonWithProofs(vr, "search", "$0.01", result as Record<string, unknown>, policy);
+  } catch (err) {
+    console.error("[search] critical error:", err);
+    return NextResponse.json({ error: "Internal Server Error", detail: String(err) }, { status: 500 });
+  }
 }
