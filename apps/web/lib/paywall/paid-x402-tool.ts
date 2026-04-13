@@ -7,6 +7,7 @@ import { settlePaymentForTool, verifyPaidOrReturn402 } from "@/lib/paywall/x402"
 import type { ToolName } from "@/lib/types";
 import {
   authorizeSpendingPolicyForPayer,
+  authorizeSplitSpendingPolicy,
   decodeX402PaymentTxHashFromHeaders,
   extractPayerAddressFromPaymentPayload,
 } from "@/lib/onchain/spending-policy";
@@ -47,6 +48,28 @@ export async function authorizeSpendingPolicyForVerifiedPayment(
   try {
     const payerAddress = extractPayerAddressFromPaymentPayload(paymentPayload);
     return await authorizeSpendingPolicyForPayer(toolName, payerAddress);
+  } catch (err: unknown) {
+    const msg = String((err as { message?: string })?.message ?? err);
+    if (isOnChainBudgetExceededMessage(msg)) {
+      return NextResponse.json({ error: "Budget exceeded" }, { status: 402 });
+    }
+    throw err;
+  }
+}
+
+/** 
+ * Extended version that calls record_split_payment on Soroban.
+ * Used for production-grade revenue splits.
+ */
+export async function authorizeSplitSpendingPolicyForVerifiedPayment(
+  paymentPayload: unknown,
+  toolName: ToolName,
+  providerAddress: string,
+  providerPercentage: number
+): Promise<SpendingPolicyProof | NextResponse> {
+  try {
+    const payerAddress = extractPayerAddressFromPaymentPayload(paymentPayload);
+    return await authorizeSplitSpendingPolicy(toolName, payerAddress, providerAddress, providerPercentage);
   } catch (err: unknown) {
     const msg = String((err as { message?: string })?.message ?? err);
     if (isOnChainBudgetExceededMessage(msg)) {
