@@ -21,7 +21,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       const horizon = new Horizon.Server("https://horizon-testnet.stellar.org");
       const cleanHash = txHash.replace("stellar:", "");
       
-      const tx = await horizon.retrieveTransaction(cleanHash);
+      const tx = await horizon.transactions().transaction(cleanHash).call();
       if (!tx.successful) {
         return NextResponse.json({ error: "Transaction was not successful" }, { status: 400 });
       }

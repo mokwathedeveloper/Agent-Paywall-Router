@@ -75,10 +75,14 @@ export async function GET(_req: Request): Promise<NextResponse> {
 export async function POST(req: Request): Promise<NextResponse> {
   try {
     const body = await req.json();
-    const { name, price_usd, endpoint, description, protocol, method, input_param, provider_split_percentage } = body;
+    const { 
+      name, price_usd, endpoint, description, protocol, 
+      method, input_param, provider_split_percentage,
+      provider_address, asset_address
+    } = body;
 
-    if (!name || !price_usd || !endpoint) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (!name || !price_usd || !endpoint || !provider_address) {
+      return NextResponse.json({ error: "Missing required fields (provider_address is required)" }, { status: 400 });
     }
 
     const service = await addService({
@@ -93,6 +97,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       spending_policy_contract: "none",
       is_external: true,
       provider_split_percentage: provider_split_percentage ? parseFloat(provider_split_percentage) : 0.7,
+      provider_address,
+      asset_address: asset_address || "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA", // Default to USDC
     });
 
     return NextResponse.json(service, { status: 201 });

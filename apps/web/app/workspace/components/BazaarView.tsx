@@ -271,6 +271,17 @@ const handleRate = async (id: string, rating: number) => {
                 <input name="endpoint" className="input" placeholder="https://api.yourdomain.com/v1/task" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required />
               </div>
 
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s4)" }}>
+                <div>
+                  <div className="caption" style={{ marginBottom: "var(--s2)" }}>Provider Wallet Address</div>
+                  <input name="provider_address" className="input" placeholder="G..." style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required />
+                </div>
+                <div>
+                  <div className="caption" style={{ marginBottom: "var(--s2)" }}>Asset Issuer (Testnet)</div>
+                  <input name="asset_address" className="input" placeholder="CBIELTK6..." defaultValue="CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA" style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }} required />
+                </div>
+              </div>
+
               <div>
                 <div className="caption" style={{ marginBottom: "var(--s2)" }}>Description</div>
                 <textarea name="description" className="input" placeholder="What does your tool do? (shown to agents)" style={{ minHeight: "120px", resize: "none", lineHeight: 1.5 }} required />
