@@ -6,7 +6,6 @@ import { generateText, jsonSchema, stepCountIs } from "ai";
 import { resolveModel } from "@/lib/llm";
 import { scanPrompt, requireSafeInput } from "@/lib/services/security";
 import type { ServiceEntry } from "@/app/api/services/route";
-import { authorizeSplitSpendingPolicy } from "@/lib/onchain/spending-policy";
 
 export const maxDuration = 90;
 
@@ -346,29 +345,23 @@ async function executeToolWithPayment(
     // ─── DYNAMIC REVENUE SPLITTING CONFIG ───
     const serviceConfig = services.find(s => s.id === toolName);
     const splitPercentage = serviceConfig?.providerSplitPercentage ?? 0.7; 
-    const providerAddress = (serviceConfig as any)?.provider_address || process.env.STELLAR_RECEIVER_ADDRESS || "";
 
     const toolResult = await callToolWithPayment(toolName, args);
     toolResultTxHash = toolResult.txHash;
     addStep(`${toolName} confirmed`, "success", toolName, price, `tx: ${toolResult.txHash}`);
 
-    // ─── ON-CHAIN ENFORCEMENT ───
-    // We call the Soroban record_split_payment function to immutably distribute revenue.
-    const policy = await authorizeSplitSpendingPolicy(
-      toolName,
-      "EXTRACTED_PAYER_ADDRESS", 
-      providerAddress,
-      splitPercentage
-    );
+    // ─── EXTRACT ON-CHAIN PROOFS ───
+    const policyTxHashFromTool = (toolResult as any).proofs?.policyTxHash || (toolResult as any).data?.proofs?.policyTxHash;
+    const policyAgentFromTool = (toolResult as any).proofs?.policyAgent || (toolResult as any).data?.proofs?.policyAgent;
 
-    if (policy.policyTxHash) {
-      addStep("SpendingPolicy.record_split_payment", "success", toolName, 0,
-        `policy_tx: ${policy.policyTxHash} provider: ${providerAddress.slice(0,8)}... split: ${splitPercentage*100}%`);
+    if (policyTxHashFromTool) {
+      addStep("SpendingPolicy.verify", "success", toolName, 0,
+        `policy_tx: ${policyTxHashFromTool} agent: ${policyAgentFromTool || "verified"}`);
     }
 
     const recorded = await recordSpend(sessionId, price);
     if (!recorded) {
-      console.warn(`[db] recordSpend returned false for session ${sessionId}`);
+      console.warn(`[db] recordSpend returned false for session ${sessionId} - budget might be zero or session expired.`);
     }
 
     const providerShare = price * splitPercentage;
@@ -383,7 +376,7 @@ async function executeToolWithPayment(
       agent_share: agentShare,
       status: "success",
       tx_hash: toolResult.txHash,
-      request_payload: { args, toolName, policyTxHash: policy.policyTxHash },
+      request_payload: { args, toolName, policyTxHash: policyTxHashFromTool },
     });
 
     return toolResult;
