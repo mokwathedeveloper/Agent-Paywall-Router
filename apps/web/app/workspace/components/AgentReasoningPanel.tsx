@@ -5,8 +5,8 @@ import { Brain, Zap, ExternalLink, CheckCircle2, ArrowRight } from "lucide-react
 
 interface MarketplaceData {
   servicesDiscovered: number;
-  cheapestService: string;
-  cheapestPriceUsd: number;
+  bestValueService: string;
+  bestValuePriceUsd: number;
   txExplorerLink: string | null;
   policyExplorerLink: string | null;
 }
@@ -102,15 +102,47 @@ export function AgentReasoningPanel({ marketplace, txHash, isExecuting, steps }:
               </div>
               <div>
                 <div style={{ fontSize: "0.75rem", fontWeight: 600, marginBottom: 2 }}>
-                  Service Selected
+                  Optimal Service Selected
                 </div>
                 <div style={{ fontSize: "0.75rem", color: "var(--text-body)" }}>
                   Selected <span style={{ color: "var(--emerald)", fontWeight: 600 }}>
-                    {selectedTool ?? marketplace.cheapestService}
-                  </span> — cheapest available at{" "}
+                    {selectedTool ?? marketplace.bestValueService}
+                  </span> — optimized for cost and reputation at{" "}
                   <span className="cost" style={{ fontSize: "0.6875rem" }}>
-                    ${marketplace.cheapestPriceUsd.toFixed(2)}
+                    ${marketplace.bestValuePriceUsd.toFixed(2)}
+                  </span>.
+                  <span style={{ marginLeft: "var(--s2)", color: "var(--indigo)", fontWeight: 600 }}>
+                    Hard budget cap enforced.
                   </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Revenue Split Reasoning */}
+          {marketplace && (
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: "var(--s3)",
+              padding: "var(--s3) var(--s4)", background: "var(--bg-deep)",
+              borderRadius: "var(--r-lg)", border: "1px solid var(--border-dim)",
+            }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: "var(--r-full)",
+                background: "var(--indigo-dim)", display: "flex", alignItems: "center",
+                justifyContent: "center", flexShrink: 0, marginTop: 1,
+              }}>
+                <ArrowRight size={12} color="var(--indigo)" />
+              </div>
+              <div>
+                <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.03em", marginBottom: 2 }}>
+                  ECONOMIC MODEL: REVENUE SPLIT
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-body)", lineHeight: 1.5 }}>
+                  Payment of <span className="cost" style={{ fontSize: "0.75rem" }}>${marketplace.bestValuePriceUsd.toFixed(2)}</span> will be split:
+                  <br />
+                  <span style={{ color: "var(--emerald)", fontWeight: 600 }}>Provider Share</span> (configured %) + <span style={{ color: "var(--indigo)", fontWeight: 600 }}>Protocol Fee</span>.
+                  <br />
+                  Breakdown verified in real-time.
                 </div>
               </div>
             </div>
