@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, Wallet, ExternalLink, LogOut } from "lucide-react";
+import { Loader2, Wallet, ExternalLink, LogOut, AlertTriangle } from "lucide-react";
 
 interface WalletState {
   address: string;
@@ -15,9 +15,23 @@ export default function WalletConnect() {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [hasExtension, setHasExtension] = useState<boolean | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    
+    // Check for wallet extensions
+    const checkExtensions = async () => {
+      // Check for Freighter
+      const freighter = await import("@stellar/freighter-api").then(m => m.isConnected()).catch(() => ({ isConnected: false }));
+      // Check for MetaMask (ethereum)
+      const ethereum = typeof window !== "undefined" && !!(window as any).ethereum;
+      
+      setHasExtension(freighter.isConnected || ethereum);
+    };
+
+    checkExtensions();
+
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) setWallet(JSON.parse(stored));
@@ -30,9 +44,9 @@ export default function WalletConnect() {
       borderRadius: "var(--r-xl)", padding: "var(--s5)",
       display: "flex", flexDirection: "column", gap: "var(--s4)",
     }}>
-      <div style={{ fontWeight: 600, fontSize: "0.875rem" }}>Connect Freighter Wallet</div>
+      <div style={{ fontWeight: 600, fontSize: "0.875rem" }}>Connect Wallet</div>
       <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
-        Connect your Freighter wallet to view your Stellar account on-chain.
+        Initializing wallet connection...
       </p>
     </div>
   );
@@ -41,21 +55,29 @@ export default function WalletConnect() {
     setConnecting(true);
     setError(null);
     try {
-      const { requestAccess, isConnected, getNetwork } = await import("@stellar/freighter-api");
+      // Dynamic import to avoid SSR issues and only load when needed
+      const freighterApi = await import("@stellar/freighter-api");
+      const { requestAccess, isConnected, getNetwork } = freighterApi;
 
-      // Retry isConnected up to 3 times — extension may not have injected yet
+      // Detect extensions with retries for injection lag
       let status = await isConnected();
       if (!status.isConnected) {
-        await new Promise(r => setTimeout(r, 500));
-        status = await isConnected();
-      }
-      if (!status.isConnected) {
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 800));
         status = await isConnected();
       }
 
+      // If Freighter isn't found, check if MetaMask exists (even if we prefer Freighter for Stellar)
+      const hasMetaMask = typeof window !== "undefined" && !!(window as any).ethereum;
+
+      if (!status.isConnected && !hasMetaMask) {
+        setHasExtension(false);
+        setError("Wallet extension not detected. Please install Freighter or MetaMask to continue.");
+        return;
+      }
+
+      // Project uses Stellar x402, so we primarily use Freighter
       if (!status.isConnected) {
-        setError("Freighter not detected. Install it at freighter.app, unlock it, then try again.");
+        setError("Freighter not detected. While MetaMask was found, this project requires a Stellar-compatible wallet like Freighter.");
         return;
       }
 
@@ -64,14 +86,17 @@ export default function WalletConnect() {
         const msg = typeof result.error === "object"
           ? (result.error as { message?: string }).message ?? JSON.stringify(result.error)
           : String(result.error);
-        setError(msg.toLowerCase().includes("declin") || msg.toLowerCase().includes("reject")
-          ? "Connection cancelled."
-          : msg);
+        
+        if (msg.toLowerCase().includes("declin") || msg.toLowerCase().includes("reject")) {
+          setError("Connection cancelled by user.");
+        } else {
+          setError(`Connection failed: ${msg}`);
+        }
         return;
       }
 
       if (!result.address) {
-        setError("No address returned. Try again.");
+        setError("No account address returned from wallet. Please unlock your wallet and try again.");
         return;
       }
 
@@ -81,8 +106,10 @@ export default function WalletConnect() {
       const w: WalletState = { address: result.address, network };
       setWallet(w);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(w));
+      setHasExtension(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error.");
+      console.error("Wallet connection error:", err);
+      setError(err instanceof Error ? err.message : "An unexpected error occurred while connecting.");
     } finally {
       setConnecting(false);
     }
@@ -113,10 +140,14 @@ export default function WalletConnect() {
         <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
           {wallet
             ? <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--emerald)", animation: "pulse-dot 2s ease infinite" }} />
-            : <Wallet size={14} color="var(--text-muted)" />
+            : <Wallet size={14} color={hasExtension === false ? "var(--rose)" : "var(--text-muted)"} />
           }
-          <span style={{ fontWeight: 600, fontSize: "0.875rem", color: wallet ? "var(--emerald)" : "var(--text)" }}>
-            {wallet ? "Freighter Connected" : "Connect Freighter Wallet"}
+          <span style={{ 
+            fontWeight: 600, 
+            fontSize: "0.875rem", 
+            color: wallet ? "var(--emerald)" : hasExtension === false ? "var(--rose)" : "var(--text)" 
+          }}>
+            {wallet ? "Wallet Connected" : hasExtension === false ? "Extension Missing" : "Connect Wallet"}
           </span>
         </div>
         {wallet && (
@@ -130,7 +161,7 @@ export default function WalletConnect() {
         )}
       </div>
 
-      {/* Address */}
+      {/* Content */}
       {wallet ? (
         <div style={{
           background: "var(--bg-card)", borderRadius: "var(--r-lg)",
@@ -148,22 +179,31 @@ export default function WalletConnect() {
             <ExternalLink size={13} color="var(--emerald)" />
           </a>
         </div>
+      ) : hasExtension === false ? (
+        <div style={{ 
+          background: "var(--rose-dim)", 
+          padding: "var(--s3)", 
+          borderRadius: "var(--r-md)",
+          display: "flex",
+          gap: "var(--s2)",
+          alignItems: "flex-start"
+        }}>
+          <AlertTriangle size={14} color="var(--rose)" style={{ flexShrink: 0, marginTop: 2 }} />
+          <p style={{ fontSize: "0.75rem", color: "var(--rose)", margin: 0, lineHeight: 1.4 }}>
+            Wallet extension not detected. Please install <a href="https://freighter.app" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline", fontWeight: 600 }}>Freighter</a> to use this app on Stellar.
+          </p>
+        </div>
       ) : (
         <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
-          Connect your Freighter wallet to view your Stellar account on-chain.
+          Connect your wallet to sign transactions and view your account on-chain.
         </p>
       )}
 
-      {/* Error */}
-      {error && (
+      {/* Error Message (General) */}
+      {error && !error.includes("not detected") && (
         <div style={{ fontSize: "0.75rem", color: "var(--rose)", display: "flex", alignItems: "center", gap: "var(--s2)" }}>
+          <AlertTriangle size={12} />
           {error}
-          {!error.includes("freighter.app") ? null : (
-            <a href="https://freighter.app" target="_blank" rel="noopener noreferrer"
-              style={{ color: "var(--emerald)", textDecoration: "underline" }}>
-              Install
-            </a>
-          )}
         </div>
       )}
 
@@ -173,10 +213,19 @@ export default function WalletConnect() {
           <LogOut size={13} /> Disconnect
         </button>
       ) : (
-        <button onClick={connect} disabled={connecting} className="btn btn-primary" style={{ fontSize: "0.8125rem" }}>
+        <button 
+          onClick={connect} 
+          disabled={connecting || hasExtension === false} 
+          className="btn btn-primary" 
+          style={{ 
+            fontSize: "0.8125rem",
+            opacity: hasExtension === false ? 0.6 : 1,
+            cursor: hasExtension === false ? "not-allowed" : "pointer"
+          }}
+        >
           {connecting
             ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Connecting…</>
-            : <><Wallet size={14} /> Connect Wallet</>
+            : hasExtension === false ? "Extension Required" : <><Wallet size={14} /> Connect Wallet</>
           }
         </button>
       )}
