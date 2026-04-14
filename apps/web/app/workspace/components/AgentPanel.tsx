@@ -41,7 +41,6 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom as steps appear
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -67,10 +66,12 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
       if (!res.ok) {
         setError((data as any).detail || (data as any).error || "Agent execution failed");
         if (data.steps) setSteps(data.steps);
+        // Sync even on error
+        const txData = await fetchTransactions(sessionId);
+        setTransactions(txData.transactions);
         return;
       }
 
-      // Animate steps in
       for (let i = 0; i < data.steps.length; i++) {
         await new Promise(r => setTimeout(r, 300));
         setSteps(data.steps.slice(0, i + 1));
@@ -78,7 +79,6 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
 
       setResult(data);
 
-      // ─── Sync with Global Store ───
       if (data.summary) {
         setSummary(data.summary);
       }
@@ -100,8 +100,6 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "var(--s6)" }}>
-      
-      {/* Search & Prompt Section */}
       <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "var(--s4)" }}>
         <div className="card" style={{ padding: "var(--s5)" }}>
           <form onSubmit={handleSubmit} style={{ display: "flex", gap: "var(--s3)" }}>
@@ -126,7 +124,6 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
               {isExecuting ? "Executing..." : "Run Agent"}
             </button>
           </form>
-          
           <div style={{ display: "flex", gap: "var(--s2)", flexWrap: "wrap", marginTop: "var(--s4)" }}>
             {SUGGESTIONS.map(s => (
               <button
@@ -143,7 +140,6 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
         </div>
       </div>
 
-      {/* Execution Workspace (Scrollable) */}
       <div 
         ref={scrollRef}
         style={{ 
@@ -152,7 +148,7 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
           display: "flex", 
           flexDirection: "column", 
           gap: "var(--s6)",
-          paddingRight: "var(--s2)" // Gutter for scrollbar
+          paddingRight: "var(--s2)"
         }}
       >
         {(steps.length > 0 || isExecuting) && (
@@ -163,7 +159,6 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
               isExecuting={isExecuting}
               steps={steps}
             />
-            
             <Timeline steps={steps} />
           </div>
         )}
@@ -180,8 +175,6 @@ export function AgentPanel({ sessionId }: { sessionId: string | null }) {
             <p className="body" style={{ color: "var(--rose)", opacity: 0.9 }}>{error}</p>
           </div>
         )}
-        
-        {/* Spacer for bottom */}
         <div style={{ minHeight: "var(--s12)", flexShrink: 0 }} />
       </div>
     </div>
