@@ -1,10 +1,8 @@
 /**
  * Search tool — real web search using:
- * 1. DuckDuckGo Instant Answer API (no key, free)
- * 2. Wikipedia Search API (no key, free) — finds articles by keyword
- * 3. Wikipedia Extract API (no key, free) — gets article content
- *
- * No API keys required for any of these.
+ * 1. Tavily (Primary, requires TAVILY_API_KEY)
+ * 2. DuckDuckGo Instant Answer API (Fallback, free)
+ * 3. Wikipedia Search & Extract APIs (Fallback, free)
  */
 
 export interface SearchResult {
@@ -17,7 +15,30 @@ export interface SearchResult {
 
 const DDG_API = "https://api.duckduckgo.com/";
 const WIKI_SEARCH_API = "https://en.wikipedia.org/w/api.php";
+const TAVILY_API = "https://api.tavily.com/search";
 const UA = "AgentPaywallRouter/1.0 (hackathon demo)";
+
+/**
+ * Mock results for demo mode or when no API keys are present and fallbacks fail.
+ */
+function getMockResults(query: string): SearchResult[] {
+  return [
+    {
+      title: `Understanding ${query} in 2024`,
+      url: "https://example.com/guide",
+      snippet: `A comprehensive guide to ${query}. This is a mock result because no search API keys are configured.`,
+      relevance: 0.9,
+      source: "Mock Provider",
+    },
+    {
+      title: `${query}: Trends and Analysis`,
+      url: "https://example.com/trends",
+      snippet: `Latest trends regarding ${query}. Configure TAVILY_API_KEY for real-time web results.`,
+      relevance: 0.85,
+      source: "Mock Provider",
+    }
+  ];
+}
 
 export async function search(query: string): Promise<{
   query: string;
@@ -26,9 +47,52 @@ export async function search(query: string): Promise<{
   searchTime: number;
 }> {
   const start = Date.now();
-  const results: SearchResult[] = [];
+  let results: SearchResult[] = [];
 
-// ── 0. Google News RSS (Real-time News) ──────────────────────────────────
+  // ── 1. Primary: Tavily (if key exists) ──────────────────────────────────
+  if (process.env.TAVILY_API_KEY) {
+    try {
+      const tavilyRes = await fetch(TAVILY_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api_key: process.env.TAVILY_API_KEY,
+          query: query,
+          search_depth: "basic",
+          max_results: 5,
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (tavilyRes.ok) {
+        const data = await tavilyRes.json();
+        const tavilyResults = (data.results || []).map((r: any) => ({
+          title: r.title,
+          url: r.url,
+          snippet: r.content,
+          relevance: r.score || 0.9,
+          source: "Tavily",
+        }));
+        results = results.concat(tavilyResults);
+      } else {
+        console.warn(`[search] Tavily API returned ${tavilyRes.status}. Falling back...`);
+      }
+    } catch (err) {
+      console.error("[search] Tavily error:", err);
+    }
+  }
+
+  // If Tavily provided enough results, we can skip fallbacks
+  if (results.length >= 3) {
+    return {
+      query,
+      results: results.slice(0, 5),
+      totalResults: results.length,
+      searchTime: Date.now() - start,
+    };
+  }
+
+  // ── 2. Fallback: Google News RSS ──────────────────────────────────
   try {
     const newsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
     const newsRes = await fetch(newsUrl, {
@@ -38,7 +102,6 @@ export async function search(query: string): Promise<{
 
     if (newsRes.ok) {
       const xml = await newsRes.text();
-      // Scrappy but effective XML parsing for a demo
       const items = xml.split("<item>").slice(1, 6);
       for (const item of items) {
         const title = item.match(/<title>(.*?)<\/title>/)?.[1] || "";
@@ -57,10 +120,10 @@ export async function search(query: string): Promise<{
       }
     }
   } catch (err) {
-    console.error("[search] Google News fallback error:", err);
+    // news fallback failed
   }
 
-  // ── 1. DuckDuckGo Instant Answer ─────────────────────────────────────────
+  // ── 3. Fallback: DuckDuckGo Instant Answer ─────────────────────────────
   try {
     const ddgUrl = `${DDG_API}?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
     const ddgRes = await fetch(ddgUrl, {
@@ -69,14 +132,7 @@ export async function search(query: string): Promise<{
     });
 
     if (ddgRes.ok) {
-      const ddg = await ddgRes.json() as {
-        AbstractText?: string;
-        AbstractURL?: string;
-        AbstractSource?: string;
-        RelatedTopics?: Array<{ Text?: string; FirstURL?: string; Name?: string }>;
-        Results?: Array<{ Text?: string; FirstURL?: string }>;
-      };
-
+      const ddg = await ddgRes.json() as any;
       if (ddg.AbstractText && ddg.AbstractText.length > 30) {
         results.push({
           title: ddg.AbstractSource ?? query,
@@ -86,91 +142,44 @@ export async function search(query: string): Promise<{
           source: "DuckDuckGo",
         });
       }
-
-      for (const topic of (ddg.RelatedTopics ?? []).slice(0, 2)) {
-        if (topic.Text && topic.FirstURL && topic.Text.length > 20) {
-          results.push({
-            title: topic.Name ?? topic.Text.split(" - ")[0] ?? topic.Text.slice(0, 60),
-            url: topic.FirstURL,
-            snippet: topic.Text,
-            relevance: 0.82,
-            source: "DuckDuckGo",
-          });
-        }
-      }
     }
   } catch {
-    // DDG failed — continue to Wikipedia
+    // DDG failed
   }
 
-  // ── 2. Wikipedia Search API ───────────────────────────────────────────────
-  try {
-    const searchUrl = `${WIKI_SEARCH_API}?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=3&format=json`;
-    const searchRes = await fetch(searchUrl, {
-      headers: { "User-Agent": UA },
-      signal: AbortSignal.timeout(8000),
-    });
+  // ── 4. Fallback: Wikipedia Search ──────────────────────────────────────
+  if (results.length < 3) {
+    try {
+      const searchUrl = `${WIKI_SEARCH_API}?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=3&format=json`;
+      const searchRes = await fetch(searchUrl, {
+        headers: { "User-Agent": UA },
+        signal: AbortSignal.timeout(8000),
+      });
 
-    if (searchRes.ok) {
-      const searchData = await searchRes.json() as {
-        query?: { search?: Array<{ title: string; snippet: string; pageid: number }> };
-      };
-
-      const wikiResults = searchData.query?.search ?? [];
-
-      for (const item of wikiResults.slice(0, 3)) {
-        const cleanSnippet = item.snippet
-          .replace(/<[^>]+>/g, "")   // strip HTML tags
-          .replace(/&quot;/g, '"')
-          .replace(/&#039;/g, "'")
-          .replace(/&amp;/g, "&")
-          .trim();
-
-        if (cleanSnippet.length > 20) {
+      if (searchRes.ok) {
+        const searchData = await searchRes.json() as any;
+        const wikiResults = searchData.query?.search ?? [];
+        for (const item of wikiResults) {
           results.push({
             title: item.title,
             url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`,
-            snippet: cleanSnippet,
+            snippet: item.snippet.replace(/<[^>]+>/g, "").trim(),
             relevance: 0.88,
             source: "Wikipedia",
           });
         }
       }
-    }
-  } catch {
-    // Wikipedia search failed — continue
-  }
-
-  // ── 3. Wikipedia Extract for top result ──────────────────────────────────
-  if (results.length > 0) {
-    const topWikiResult = results.find(r => r.source === "Wikipedia");
-    if (topWikiResult) {
-      try {
-        const title = topWikiResult.title.replace(/ /g, "_");
-        const extractUrl = `${WIKI_SEARCH_API}?action=query&titles=${encodeURIComponent(title)}&prop=extracts&exintro=1&explaintext=1&exsentences=3&format=json&origin=*`;
-        const extractRes = await fetch(extractUrl, {
-          headers: { "User-Agent": UA },
-          signal: AbortSignal.timeout(6000),
-        });
-
-        if (extractRes.ok) {
-          const extractData = await extractRes.json() as {
-            query?: { pages?: Record<string, { extract?: string }> };
-          };
-          const pages = Object.values(extractData.query?.pages ?? {});
-          const extract = pages[0]?.extract;
-          if (extract && extract.length > 50) {
-            // Upgrade the snippet with the full extract
-            topWikiResult.snippet = extract.slice(0, 350);
-          }
-        }
-      } catch {
-        // Extract failed — keep existing snippet
-      }
+    } catch {
+      // Wiki failed
     }
   }
 
-  // ── 4. Always include a DuckDuckGo search link ───────────────────────────
+  // ── 5. Absolute Fallback: Mock Data ─────────────────────────────────────
+  if (results.length === 0) {
+    results = getMockResults(query);
+  }
+
+  // Always include a DuckDuckGo search link
   results.push({
     title: `More results for "${query}"`,
     url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
@@ -179,7 +188,9 @@ export async function search(query: string): Promise<{
     source: "DuckDuckGo",
   });
 
-  const sliced = results.slice(0, 5);
+  const uniqueResults = Array.from(new Map(results.map(r => [r.url, r])).values());
+  const sliced = uniqueResults.slice(0, 5);
+
   return {
     query,
     results: sliced,
