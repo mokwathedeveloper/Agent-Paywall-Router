@@ -20,7 +20,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://horizon-testnet.stellar.org https://soroban-testnet.stellar.org https://x402.org https://openrouter.ai https://api.openai.com https://api.duckduckgo.com https://en.wikipedia.org",
+      "connect-src 'self' https://horizon-testnet.stellar.org https://soroban-testnet.stellar.org https://x402.org https://openrouter.ai https://api.openai.com https://api.duckduckgo.com https://en.wikipedia.org https://api.tavily.com https://news.google.com https://api.open-meteo.com https://geocoding-api.open-meteo.com",
       "frame-ancestors 'none'",
     ].join("; "),
   },
