@@ -437,6 +437,8 @@ scripts/
 
 ## Troubleshooting
 
+### Quick Reference
+
 | Error | Cause | Fix |
 |---|---|---|
 | HTTP 503 on `/api/agent` | No LLM key set | Add `OPENROUTER_API_KEY` to `.env.local` |
@@ -445,6 +447,33 @@ scripts/
 | HTTP 504 on `/api/agent` | Stellar RPC slow | Retry — testnet can be slow |
 | `trustline_missing` in A2A demo | No USDC trustline | Use "Establish USDC Trustline" button in A2A UI |
 | `Unable to extract payer address` | x402 payload mismatch | Check `@x402/stellar` version |
+| `Search provider error (HTTP 400)` | Invalid or missing search API key | See Search Configuration below |
+| `Search provider error (HTTP 401)` | Expired Tavily API key | Regenerate key at [tavily.com](https://tavily.com) |
+
+### Search Configuration
+
+The search tool uses a **cascading provider strategy** — it tries multiple providers in order and always returns results:
+
+| Priority | Provider | Key Required | Notes |
+|---|---|---|---|
+| 1 | **Tavily** | `TAVILY_API_KEY` | High-quality web results. Free tier: 1000 req/month at [tavily.com](https://tavily.com) |
+| 2 | **Google News RSS** | None | Real-time news headlines, free |
+| 3 | **DuckDuckGo** | None | Instant answers + related topics, free |
+| 4 | **Wikipedia** | None | Article search with snippets, free |
+| 5 | **Mock Data** | None | Clearly labelled fallback — always works |
+
+**To configure Tavily (recommended):**
+
+```bash
+# 1. Sign up at https://tavily.com (free tier, no credit card)
+# 2. Copy your API key
+# 3. Add to apps/web/.env.local:
+TAVILY_API_KEY=tvly-your-key-here
+```
+
+**If no key is configured:** The search tool works without any API key using Google News, DuckDuckGo, and Wikipedia. If all providers are unreachable, it returns clearly labelled mock data.
+
+**"Search failed" after payment:** The agent does **not** retry broken providers. The error is returned to the LLM which reports it to the user. Check server logs for the specific upstream error.
 
 ---
 
