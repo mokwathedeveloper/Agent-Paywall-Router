@@ -34,7 +34,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     paymentRequirements: unknown;
   };
 
-  const q = req.nextUrl.searchParams.get("q") ?? "AI agent payments";
+  const q = req.nextUrl.searchParams.get("q")?.trim();
+  if (!q) {
+    return NextResponse.json({ error: "Missing query parameter 'q'" }, { status: 400 });
+  }
+
   try {
     requireSafeInput(q);
   } catch (err) {
@@ -55,12 +59,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       providerAddress, 
       0.7 // 70% to provider
     );
+    
     if (policy instanceof NextResponse) return policy;
 
     const result = await search(q);
+    
+    if (!result || !result.results || result.results.length === 0) {
+      console.warn(`[search] No results found for query: "${q}". Returning empty set.`);
+    }
+
     return settlePaidToolJsonWithProofs(vr, "search", "$0.01", result as Record<string, unknown>, policy);
   } catch (err) {
-    console.error("[search] critical error:", err);
-    return NextResponse.json({ error: "Internal Server Error", detail: String(err) }, { status: 500 });
+    console.error("[search] Critical error in search handler:", err);
+    
+    // Attempt to return a graceful error instead of 500 if possible, 
+    // but search failures shouldn't break the payment flow if we already verified payment.
+    return NextResponse.json({ 
+      error: "Search service temporarily unavailable", 
+      detail: err instanceof Error ? err.message : String(err) 
+    }, { status: 503 });
   }
 }
