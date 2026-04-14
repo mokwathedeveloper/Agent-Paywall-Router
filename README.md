@@ -562,6 +562,23 @@ The router implements a sophisticated selection algorithm: `Value Score = Price 
 
 ---
 
-## License
+## 🛠 Troubleshooting
 
-MIT — Mokwa Moffat Ohuru
+### Wallet Connection Issues
+- **"Freighter not detected"**: This app requires a Stellar-compatible wallet. Ensure you have the [Freighter extension](https://freighter.app) installed and unlocked.
+- **"MetaMask extension not found"**: While the app detects MetaMask, it primarily uses Stellar for x402 payments. If you see this warning, please ensure Freighter is installed.
+- **"Failed to connect"**: If you've rejected a connection request, simply refresh the page or click "Connect Wallet" again.
+- **Stellar Network**: Ensure your wallet is set to **Testnet**, as this project operates on the Stellar Testnet.
+
+### Search Tool Issues
+- **"Search provider error"**: This usually means the external search API (Tavily) is unreachable or the key is invalid. 
+- **Configuration**: To enable high-quality real-time search, add `TAVILY_API_KEY` to your `.env`. You can get a free key at [tavily.com](https://tavily.com).
+- **Fallback**: If no key is provided, the app automatically falls back to **DuckDuckGo** and **Wikipedia**. If all external services fail, it will return labeled **Mock Data** to ensure the agent's reasoning loop can continue.
+
+### Browser Console Warnings
+- **"SES Removing unpermitted intrinsics"**: This is a normal warning from the Secure ECMAScript (SES) lockdown script. It is part of the project's security architecture to ensure a hardened execution environment for agent payments. You can safely ignore it.
+- **Font Preload Warnings**: If you see warnings about unused preloaded fonts, the project has been updated to load fonts only when needed by CSS.
+
+### Session Initialization
+- **"Session init failed"**: The app requires a local API to be running at `/api/sessions`. Ensure you've run `npm run dev` and your environment variables (like `SUPABASE_URL`) are correctly configured in `.env`.
+ — Mokwa Moffat Ohuru
