@@ -89,7 +89,7 @@ export async function authorizeSpendingPolicyForPayer(toolName: ToolName, payerA
 
 export async function authorizeSplitSpendingPolicy(
   toolName: ToolName,
-  payerAddress: string,
+  payerAddress: string | null,
   providerAddress: string,
   providerPercentage: number
 ) {
