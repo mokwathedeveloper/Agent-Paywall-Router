@@ -10,6 +10,7 @@
  *   5. Returns the unlocked tool result
  */
 import { STELLAR_NETWORK } from "../constants";
+import { sanitizeLog } from "../services/security";
 
 export class ExternalAgentClient {
   private baseUrl: string;
@@ -28,7 +29,7 @@ export class ExternalAgentClient {
     console.log("[Stellar/x402] Discovering tools via MCP — network: stellar:testnet");
     const res = await fetch(`${this.baseUrl}/api/mcp/tools`);
     const data = await res.json();
-    console.log(`[Stellar/x402] Discovered ${data.tools?.length ?? 0} tools`);
+    console.log(`[Stellar/x402] Discovered ${sanitizeLog(data.tools?.length ?? 0)} tools`);
     return data.tools;
   }
 
@@ -44,7 +45,7 @@ export class ExternalAgentClient {
    *   → 200 OK + tool result
    */
   async executeTool(toolName: string, args: Record<string, string>) {
-    console.log(`[Stellar/x402] Initiating payment for tool: ${toolName} — network: ${STELLAR_NETWORK}`);
+    console.log(`[Stellar/x402] Initiating payment for tool: ${sanitizeLog(toolName)} — network: ${STELLAR_NETWORK}`);
 
     const { wrapFetchWithPayment, x402Client } = await import("@x402/fetch");
     const { ExactStellarScheme, createEd25519Signer } = await import("@x402/stellar");
@@ -58,7 +59,7 @@ export class ExternalAgentClient {
       ? `${this.baseUrl}/api/tools/search?q=${encodeURIComponent(args.query || args.text || "")}`
       : `${this.baseUrl}/api/tools/${toolName}`;
 
-    console.log(`[Stellar/x402] Requesting ${targetUrl} — will auto-pay on 402`);
+    console.log(`[Stellar/x402] Requesting ${sanitizeLog(targetUrl)} — will auto-pay on 402`);
 
     const res = await fetchWithPayment(targetUrl, {
       method: toolName === "search" ? "GET" : "POST",
@@ -67,13 +68,22 @@ export class ExternalAgentClient {
     });
 
     if (!res.ok) {
-      // If we got here, wrapFetchWithPayment already tried paying if it was a 402.
-      // Any error now is likely a permanent failure (400, 500, etc.) and we should stop.
-      const errorBody = await res.json().catch(() => ({}));
-      const message = errorBody.detail || errorBody.error || `HTTP ${res.status}`;
+      // wrapFetchWithPayment already handled any 402→pay→retry cycle.
+      // A non-OK here means the provider itself failed (400, 500, 503, etc.).
+      // Do NOT retry — the upstream service has a permanent or transient issue.
+      let errorDetail: string;
+      try {
+        const errorBody = await res.json() as Record<string, unknown>;
+        errorDetail = String(errorBody.detail || errorBody.error || JSON.stringify(errorBody));
+      } catch {
+        errorDetail = await res.text().catch(() => `HTTP ${res.status}`);
+      }
       
-      console.error(`[Stellar/x402] Tool execution failed permanently: ${message}`);
-      throw new Error(`${toolName.charAt(0).toUpperCase() + toolName.slice(1)} provider error: ${message}`);
+      const label = toolName.charAt(0).toUpperCase() + toolName.slice(1);
+      const message = `${sanitizeLog(label)} provider error (HTTP ${sanitizeLog(res.status)}): ${sanitizeLog(errorDetail)}`;
+      console.error(`[Stellar/x402] ${message}`);
+      console.error(`[Stellar/x402] This is NOT a payment error — do not retry.`);
+      throw new Error(message);
     }
 
     const result = await res.json();
@@ -82,12 +92,12 @@ export class ExternalAgentClient {
 
     if (paymentTxHash) {
       const hash = String(paymentTxHash).replace("stellar:", "");
-      console.log(`[Stellar/x402] Payment confirmed — tx: ${paymentTxHash}`);
-      console.log(`[Stellar/x402] Verify: https://stellar.expert/explorer/testnet/tx/${hash}`);
+      console.log(`[Stellar/x402] Payment confirmed — tx: ${sanitizeLog(paymentTxHash)}`);
+      console.log(`[Stellar/x402] Verify: https://stellar.expert/explorer/testnet/tx/${sanitizeLog(hash)}`);
     }
     if (policyTxHash) {
-      console.log(`[Stellar/x402] Soroban policy tx: ${policyTxHash}`);
-      console.log(`[Stellar/x402] Policy verify: https://stellar.expert/explorer/testnet/tx/${policyTxHash}`);
+      console.log(`[Stellar/x402] Soroban policy tx: ${sanitizeLog(policyTxHash)}`);
+      console.log(`[Stellar/x402] Policy verify: https://stellar.expert/explorer/testnet/tx/${sanitizeLog(policyTxHash)}`);
     }
 
     return result;

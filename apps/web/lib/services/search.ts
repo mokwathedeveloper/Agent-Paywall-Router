@@ -17,28 +17,7 @@ const DDG_API = "https://api.duckduckgo.com/";
 const WIKI_SEARCH_API = "https://en.wikipedia.org/w/api.php";
 const TAVILY_API = "https://api.tavily.com/search";
 const UA = "AgentPaywallRouter/1.0 (hackathon demo)";
-
-/**
- * Mock results for demo mode or when no API keys are present and fallbacks fail.
- */
-function getMockResults(query: string): SearchResult[] {
-  return [
-    {
-      title: `Understanding ${query} in 2024`,
-      url: "https://example.com/guide",
-      snippet: `A comprehensive guide to ${query}. This is a mock result because no search API keys are configured.`,
-      relevance: 0.9,
-      source: "Mock Provider",
-    },
-    {
-      title: `${query}: Trends and Analysis`,
-      url: "https://example.com/trends",
-      snippet: `Latest trends regarding ${query}. Configure TAVILY_API_KEY for real-time web results.`,
-      relevance: 0.85,
-      source: "Mock Provider",
-    }
-  ];
-}
+import { sanitizeLog } from "./security";
 
 export async function search(query: string): Promise<{
   query: string;
@@ -75,7 +54,7 @@ export async function search(query: string): Promise<{
         }));
         results = results.concat(tavilyResults);
       } else {
-        console.warn(`[search] Tavily API returned ${tavilyRes.status}. Falling back...`);
+        console.warn(`[search] Tavily API returned ${sanitizeLog(tavilyRes.status)}. Falling back...`);
       }
     } catch (err) {
       console.error("[search] Tavily error:", err);
@@ -172,11 +151,6 @@ export async function search(query: string): Promise<{
     } catch {
       // Wiki failed
     }
-  }
-
-  // ── 5. Absolute Fallback: Mock Data ─────────────────────────────────────
-  if (results.length === 0) {
-    results = getMockResults(query);
   }
 
   // Always include a DuckDuckGo search link

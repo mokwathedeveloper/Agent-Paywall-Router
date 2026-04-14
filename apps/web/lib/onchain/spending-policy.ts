@@ -91,7 +91,7 @@ export async function authorizeSplitSpendingPolicy(
   toolName: ToolName,
   payerAddress: string | null,
   providerAddress: string,
-  providerPercentage: number
+  _providerPercentage: number
 ) {
   if (!process.env.STELLAR_PRIVATE_KEY) throw new Error("Missing STELLAR_PRIVATE_KEY.");
 
@@ -102,56 +102,9 @@ export async function authorizeSplitSpendingPolicy(
     return authorizeSpendingPolicyForPayer(toolName, finalPayer || finalProvider);
   }
 
-  const amountTokenUnits = TOOL_PRICES_TOKEN_UNITS[toolName];
-  const { Keypair, Contract, TransactionBuilder, Horizon, rpc, Networks, BASE_FEE, nativeToScVal } = await import("@stellar/stellar-sdk");
-
-  const adminKeypair = Keypair.fromSecret(process.env.STELLAR_PRIVATE_KEY);
-  const adminAddress = adminKeypair.publicKey();
-  const horizon = new Horizon.Server("https://horizon-testnet.stellar.org");
-  const account = await horizon.loadAccount(adminAddress);
-  const contract = new Contract(SPENDING_POLICY_CONTRACT_ID);
-  const scaledPercentage = Math.round(providerPercentage * 100);
-
-  const rpcServer = new rpc.Server("https://soroban-testnet.stellar.org", { timeout: 20000 });
-  
-  // Try split payment
-  const unsignedSplitTx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
-    .addOperation(contract.call("record_split_payment", nativeToScVal(finalPayer, { type: "address" }), nativeToScVal(finalProvider, { type: "address" }), nativeToScVal(BigInt(amountTokenUnits), { type: "i128" }), nativeToScVal(scaledPercentage, { type: "u32" })))
-    .setTimeout(30)
-    .build();
-  
-  let sim;
-  try {
-    sim = await rpcServer.simulateTransaction(unsignedSplitTx);
-  } catch (err) {
-    console.warn("[Soroban] record_split_payment simulation error, falling back.");
-  }
-
-  if (sim && rpc.Api.isSimulationSuccess(sim)) {
-    const finalTx = (rpc.assembleTransaction(unsignedSplitTx, sim) as any).build();
-    finalTx.sign(adminKeypair);
-    const res = await horizon.submitTransaction(finalTx);
-    if (res.successful) return { policyTxHash: res.hash, policyAgent: finalPayer };
-  }
-
-  // Fallback to basic auth
-  console.log("[Soroban] Falling back to standard authorize().");
-  const unsignedAuthTx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
-    .addOperation(contract.call("authorize", nativeToScVal(finalPayer, { type: "address" }), nativeToScVal(BigInt(amountTokenUnits), { type: "i128" })))
-    .setTimeout(30)
-    .build();
-  
-  const authSim = await rpcServer.simulateTransaction(unsignedAuthTx);
-  if (!authSim || !rpc.Api.isSimulationSuccess(authSim)) {
-    throw new Error(`SpendingPolicy simulation failed.`);
-  }
-
-  const finalAuthTx = (rpc.assembleTransaction(unsignedAuthTx, authSim) as any).build();
-  finalAuthTx.sign(adminKeypair);
-  const authRes = await horizon.submitTransaction(finalAuthTx);
-  if (!authRes.successful) throw new Error(`SpendingPolicy transaction failed.`);
-
-  return { policyTxHash: authRes.hash, policyAgent: finalPayer };
+  // Always fall back directly to authorize() — record_split_payment is not in the deployed contract.
+  // This avoids consuming the account sequence number on a doomed simulation attempt.
+  return authorizeSpendingPolicyForPayer(toolName, finalPayer);
 }
 
 export async function decodeX402PaymentTxHashFromHeaders(headers: Record<string, string>) {

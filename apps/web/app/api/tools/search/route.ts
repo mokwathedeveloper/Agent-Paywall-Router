@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { search } from "@/lib/services/search";
 import { verifyPaidOrReturn402 } from "@/lib/paywall/x402";
-import { isSecurityViolationError, requireSafeInput } from "@/lib/services/security";
+import { isSecurityViolationError, requireSafeInput, sanitizeLog } from "@/lib/services/security";
 import {
   authorizeSplitSpendingPolicyForVerifiedPayment,
   paidX402EarlyResponse,
@@ -37,6 +37,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const q = req.nextUrl.searchParams.get("q")?.trim();
   if (!q) {
     return NextResponse.json({ error: "Missing query parameter 'q'" }, { status: 400 });
+  }
+
+  // Validate length and character set before security scan (CWE-94 / CWE-117)
+  if (q.length > 500 || /[\r\n]/.test(q)) {
+    return NextResponse.json({ error: "Invalid query parameter 'q'" }, { status: 400 });
   }
 
   try {
@@ -65,15 +70,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const result = await search(q);
     
     if (!result || !result.results || result.results.length === 0) {
-      console.warn(`[search] No results found for query: "${q}". Returning empty set.`);
+      console.warn(`[search] No results found for query: "${sanitizeLog(q)}". Returning empty set.`);
     }
 
     return settlePaidToolJsonWithProofs(vr, "search", "$0.01", result as Record<string, unknown>, policy);
   } catch (err) {
     console.error("[search] Critical error in search handler:", err);
     
-    // Attempt to return a graceful error instead of 500 if possible, 
-    // but search failures shouldn't break the payment flow if we already verified payment.
+    // Return descriptive error to stop client retry loops
     return NextResponse.json({ 
       error: "Search service temporarily unavailable", 
       detail: err instanceof Error ? err.message : String(err) 

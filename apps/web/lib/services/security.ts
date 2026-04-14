@@ -66,3 +66,11 @@ export function requireSafeInput(input: string): void {
 export function isSecurityViolationError(err: unknown): boolean {
   return (err as { name?: string })?.name === "SecurityViolation";
 }
+
+/**
+ * Strips newline characters from a value before it is written to logs.
+ * Prevents log injection (CWE-117).
+ */
+export function sanitizeLog(value: unknown): string {
+  return String(value ?? "").replace(/[\r\n]/g, " ");
+}

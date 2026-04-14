@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWeather } from "@/lib/services/weather";
 import { verifyPaidOrReturn402 } from "@/lib/paywall/x402";
-import { isSecurityViolationError, requireSafeInput } from "@/lib/services/security";
+import { isSecurityViolationError, requireSafeInput, sanitizeLog } from "@/lib/services/security";
 import {
   authorizeSplitSpendingPolicyForVerifiedPayment,
   paidX402EarlyResponse,
@@ -25,9 +25,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     paymentRequirements: unknown;
   };
 
-  const location = req.nextUrl.searchParams.get("location");
+  const location = req.nextUrl.searchParams.get("location")?.trim();
   if (!location) {
     return NextResponse.json({ error: "Missing 'location' parameter" }, { status: 400 });
+  }
+
+  // Validate length and strip control characters before security scan (CWE-94 / CWE-117)
+  if (location.length > 200 || /[\r\n]/.test(location)) {
+    return NextResponse.json({ error: "Invalid 'location' parameter" }, { status: 400 });
   }
 
   try {
@@ -53,7 +58,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const result = await getWeather(location);
     return settlePaidToolJsonWithProofs(vr, "weather", "$0.05", result as Record<string, unknown>, policy);
   } catch (err) {
-    console.error("[weather] critical error:", err);
-    return NextResponse.json({ error: "Internal Server Error", detail: String(err) }, { status: 500 });
+    console.error("[weather] critical error:", sanitizeLog(err));
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

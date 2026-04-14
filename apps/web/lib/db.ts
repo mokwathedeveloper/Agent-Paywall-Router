@@ -4,6 +4,7 @@
  */
 import { supabase, isSupabaseConfigured, type DBSession, type DBTransaction, type DBService } from "./supabase";
 import { DEFAULT_SPENDING_LIMIT, SESSION_TTL_MS, TOOL_PRICES, SPENDING_POLICY_CONTRACT_ID, USDC_TESTNET_ADDRESS } from "./constants";
+import { sanitizeLog } from "./services/security";
 
 // ─── In-memory fallback ───
 if (!isSupabaseConfigured && process.env.NODE_ENV === "production") {
@@ -110,7 +111,7 @@ async function syncDefaultServices() {
   for (const service of DEFAULT_SERVICES) {
     const { data } = await supabase.from("services").select("id").eq("id", service.id).single();
     if (!data) {
-      console.log(`[db] Seeding default service to Supabase: ${service.id}`);
+    console.log(`[db] Seeding default service to Supabase: ${sanitizeLog(service.id)}`);
       await supabase.from("services").insert(service);
     }
   }
@@ -238,7 +239,7 @@ export async function recordSpend(sessionId: string, amount: number): Promise<bo
     if (!rpcError && typeof rpcData === "boolean") return rpcData;
     
     if (rpcError) {
-      console.error(`[db] recordSpend RPC error for session ${sessionId}:`, rpcError.message);
+      console.error(`[db] recordSpend RPC error for session ${sanitizeLog(sessionId)}:`, sanitizeLog(rpcError.message));
     }
 
     const session = await getSession(sessionId);

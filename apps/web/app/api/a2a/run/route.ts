@@ -5,17 +5,20 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const { secretKey } = body as { secretKey?: string };
 
-  if (!secretKey || !secretKey.startsWith("S") || secretKey.length !== 56) {
+  // Strict Stellar secret key validation: must be S + 55 base32 alphanumeric chars
+  if (
+    !secretKey ||
+    typeof secretKey !== "string" ||
+    !/^S[A-Z2-7]{55}$/.test(secretKey)
+  ) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "invalid_key", message: "Invalid Stellar secret key format." },
-      },
+      { ok: false, error: { code: "invalid_key", message: "Invalid Stellar secret key format." } },
       { status: 400 }
     );
   }
 
-  const baseUrl = req.headers.get("origin") ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+  // Use only the trusted env var for baseUrl — never trust the Origin header (SSRF guard)
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
 
   try {
     const client = new ExternalAgentClient(baseUrl, secretKey);

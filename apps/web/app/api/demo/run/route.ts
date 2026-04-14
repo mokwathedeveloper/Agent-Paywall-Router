@@ -48,7 +48,10 @@ interface AgentResponse {
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const taskParam = req.nextUrl.searchParams.get("task");
-  const task = taskParam?.trim() || DEMO_TASKS[0];
+  // Sanitize: strip control characters, enforce max length, reject URL-like values (SSRF guard)
+  const rawTask = taskParam?.trim().replace(/[\r\n]/g, " ").slice(0, 500) ?? "";
+  const isUrlLike = /^https?:\/\//i.test(rawTask);
+  const task = (!rawTask || isUrlLike) ? DEMO_TASKS[0] : rawTask;
 
   // Validate env before starting — fail fast with a clear message
   const missing: string[] = [];

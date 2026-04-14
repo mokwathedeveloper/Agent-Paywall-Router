@@ -58,8 +58,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     // Payment verified — execute search
     const body = await req.json().catch(() => ({})) as { query?: string };
+    const rawQuery = String(body.query ?? "").replace(/[\r\n]/g, " ").slice(0, 500);
     try {
-      requireSafeInput(String(body.query ?? ""));
+      requireSafeInput(rawQuery);
     } catch (err) {
       if (isSecurityViolationError(err)) {
         return NextResponse.json(
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       }
       throw err;
     }
-    const searchResult = await search(body.query ?? "machine payments Stellar");
+    const searchResult = await search(rawQuery || "machine payments Stellar");
 
     return result.withReceipt(
       NextResponse.json({

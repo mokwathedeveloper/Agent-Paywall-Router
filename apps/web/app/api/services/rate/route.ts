@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateService, getAllServices } from "@/lib/db";
+import { sanitizeLog } from "@/lib/services/security";
 
 export async function POST(req: Request): Promise<NextResponse> {
   try {
@@ -21,6 +22,11 @@ export async function POST(req: Request): Promise<NextResponse> {
       const horizon = new Horizon.Server("https://horizon-testnet.stellar.org");
       const cleanHash = txHash.replace("stellar:", "");
       
+      // Validate txHash is a hex string before using it (CWE-94 / CWE-117)
+      if (!/^[a-fA-F0-9]{64}$/.test(cleanHash)) {
+        return NextResponse.json({ error: "Invalid transaction hash format" }, { status: 400 });
+      }
+
       const tx = await horizon.transactions().transaction(cleanHash).call();
       if (!tx.successful) {
         return NextResponse.json({ error: "Transaction was not successful" }, { status: 400 });
@@ -34,7 +40,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         return NextResponse.json({ error: "Service not found" }, { status: 404 });
       }
 
-      console.log(`[Reputation] Verified purchaser for ${id} via tx: ${cleanHash}`);
+      console.log(`[Reputation] Verified purchaser for ${sanitizeLog(id)} via tx: ${sanitizeLog(cleanHash)}`);
     } catch (err) {
       console.error("[Reputation] tx verification failed:", err);
       return NextResponse.json({ error: "Could not verify transaction on Stellar" }, { status: 400 });

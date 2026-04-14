@@ -5,6 +5,7 @@ import {
   type SpendingSummary,
   type DBSession
 } from "./types";
+import { sanitizeLog } from "./services/security";
 
 export interface Tool {
   id: string;
@@ -101,10 +102,10 @@ export async function executeAgentTask(prompt: string, sessionId: string) {
     const errorBody = await res.json().catch(() => ({}));
     console.error("[store.ts] Agent execution failed on server:", {
       status: res.status,
-      error: errorBody.error,
-      detail: errorBody.detail,
-      step: errorBody.step,
-      stack: errorBody.stack,
+      error: sanitizeLog(errorBody.error),
+      detail: sanitizeLog(errorBody.detail),
+      step: sanitizeLog(errorBody.step),
+      stack: sanitizeLog(errorBody.stack),
     });
     const message = errorBody.detail || errorBody.error || "Agent execution failed";
     throw new Error(message);

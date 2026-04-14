@@ -4,8 +4,23 @@ import { TOOL_PRICES, STELLAR_NETWORK } from "@/lib/constants";
 import type { AgentStep, ToolName } from "@/lib/types";
 import { generateText, jsonSchema, stepCountIs } from "ai";
 import { resolveModel } from "@/lib/llm";
-import { scanPrompt, requireSafeInput } from "@/lib/services/security";
+import { scanPrompt, requireSafeInput, sanitizeLog } from "@/lib/services/security";
 import type { ServiceEntry } from "@/app/api/services/route";
+
+/**
+ * Error class for upstream tool/provider failures (non-402, non-budget).
+ * When this is thrown, the agent should NOT retry — the provider is broken.
+ */
+class ToolProviderError extends Error {
+  public readonly toolName: string;
+  public readonly httpStatus: number;
+  constructor(toolName: string, httpStatus: number, message: string) {
+    super(message);
+    this.name = "ToolProviderError";
+    this.toolName = toolName;
+    this.httpStatus = httpStatus;
+  }
+}
 
 export const maxDuration = 90;
 
@@ -238,7 +253,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const result = await generateText({
         model,
         system: buildSystemPrompt(services),
-        prompt,
+        // prompt is already validated by scanPrompt() above — passed as user turn, not system
+        prompt: prompt.slice(0, 2000),
         tools: agentTools,
         stopWhen: stepCountIs(5),
         abortSignal: controller.signal,
@@ -300,7 +316,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
 
   } catch (err) {
-    console.error("Agent execution error:", err);
+    console.error("Agent execution error:", sanitizeLog(err));
     const message = String(err);
     addStep("Error", "failed", null, 0, message);
 
@@ -356,12 +372,12 @@ async function executeToolWithPayment(
 
     if (policyTxHashFromTool) {
       addStep("SpendingPolicy.verify", "success", toolName, 0,
-        `policy_tx: ${policyTxHashFromTool} agent: ${policyAgentFromTool || "verified"}`);
+        `policy_tx: ${sanitizeLog(policyTxHashFromTool)} agent: ${sanitizeLog(policyAgentFromTool || "verified")}`);
     }
 
     const recorded = await recordSpend(sessionId, price);
     if (!recorded) {
-      console.warn(`[db] recordSpend returned false for session ${sessionId} - budget might be zero or session expired.`);
+    console.warn(`[db] recordSpend returned false for session ${sanitizeLog(sessionId)} - budget might be zero or session expired.`);
     }
 
     const providerShare = price * splitPercentage;
@@ -381,6 +397,30 @@ async function executeToolWithPayment(
 
     return toolResult;
   } catch (err) {
+    // ─── PROVIDER ERROR → return graceful error data instead of re-throwing ───
+    // This prevents the LLM from retrying a broken provider endlessly.
+    if (err instanceof ToolProviderError) {
+      const errMsg = `${sanitizeLog(toolName)} provider error (HTTP ${sanitizeLog(err.httpStatus)}): ${sanitizeLog(err.message)}`;
+      addStep(`${toolName} provider error`, "failed", toolName, 0, errMsg);
+      console.error(`[agent] ${errMsg}`);
+      await addTransaction({
+        session_id: sessionId,
+        endpoint: `/api/tools/${toolName}`,
+        tool_name: toolName,
+        amount: price,
+        provider_share: 0,
+        agent_share: 0,
+        status: "failed",
+        tx_hash: toolResultTxHash,
+        request_payload: { args, toolName, policyTxHash: null, error: errMsg },
+      });
+      // Return error data to the LLM so it can report it instead of retrying
+      return {
+        data: { error: errMsg, suggestion: "The upstream service is temporarily unavailable. Do not retry this tool." },
+        txHash: toolResultTxHash ?? "none",
+      };
+    }
+
     addStep(`${toolName} failed`, "failed", toolName, price, String(err));
     await addTransaction({
       session_id: sessionId,
@@ -409,9 +449,18 @@ async function callToolWithPayment(
     throw new Error("Missing STELLAR_PRIVATE_KEY or STELLAR_RECEIVER_ADDRESS.");
   }
 
+  // Allowlist: only route to known internal tool paths — prevents SSRF via toolName
+  const ALLOWED_TOOLS = new Set(["search", "summarize", "analyze", "weather"]);
+  if (!ALLOWED_TOOLS.has(toolName)) {
+    throw new ToolProviderError(toolName, 400, `Unknown tool: ${sanitizeLog(toolName)}`);
+  }
+
+  const isGetTool = toolName === "search" || toolName === "weather";
   const targetUrl = toolName === "search"
     ? `${baseUrl}/api/tools/search?q=${encodeURIComponent(args.query ?? args.text ?? "")}`
-    : `${baseUrl}/api/tools/${toolName}`;
+    : toolName === "weather"
+      ? `${baseUrl}/api/tools/weather?location=${encodeURIComponent(args.location ?? "")}`
+      : `${baseUrl}/api/tools/${toolName}`;
 
   const { wrapFetchWithPayment, x402Client, decodePaymentResponseHeader } = await import("@x402/fetch");
   const { ExactStellarScheme, createEd25519Signer } = await import("@x402/stellar");
@@ -422,14 +471,28 @@ async function callToolWithPayment(
   const fetchWithPayment = wrapFetchWithPayment(fetch, client);
 
   const res = await fetchWithPayment(targetUrl, {
-    method: toolName === "search" ? "GET" : "POST",
+    method: isGetTool ? "GET" : "POST",
     headers: { "Content-Type": "application/json" },
-    body: toolName === "search" ? undefined : JSON.stringify({ text: args.text || args.query }),
+    body: isGetTool ? undefined : JSON.stringify({ text: args.text || args.query }),
   });
 
+  // ─── NON-OK RESPONSE AFTER PAYMENT ───
+  // wrapFetchWithPayment already handled the 402→pay→retry cycle.
+  // If we get a non-OK here, the provider itself failed (400/500/503).
+  // Throw ToolProviderError so executeToolWithPayment returns gracefully.
   if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`Tool call failed with status ${res.status}: ${errorText}`);
+    let errorDetail: string;
+    try {
+      const errorBody = await res.json() as Record<string, unknown>;
+      errorDetail = String(errorBody.detail || errorBody.error || JSON.stringify(errorBody));
+    } catch {
+      errorDetail = await res.text().catch(() => `HTTP ${res.status}`);
+    }
+    throw new ToolProviderError(
+      toolName,
+      res.status,
+      `${toolName} upstream error: ${errorDetail}`
+    );
   }
 
   const data = await res.json();
@@ -440,8 +503,8 @@ async function callToolWithPayment(
   const txHash = decoded.transaction;
   if (!txHash) throw new Error("PAYMENT-RESPONSE did not include a transaction hash.");
 
-  console.log(`[Stellar/x402] Payment settled — tool: ${toolName} — tx: stellar:${txHash}`);
-  console.log(`[Stellar/x402] Explorer: https://stellar.expert/explorer/testnet/tx/${txHash}`);
+  console.log(`[Stellar/x402] Payment settled — tool: ${sanitizeLog(toolName)} — tx: stellar:${sanitizeLog(txHash)}`);
+  console.log(`[Stellar/x402] Explorer: https://stellar.expert/explorer/testnet/tx/${sanitizeLog(txHash)}`);
 
   return { data, txHash: `stellar:${txHash}` };
 }
