@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { sanitizeLog } from "@/lib/services/security";
 
 const ToolNameSchema = z.enum(["search", "summarize", "analyze"]);
 
@@ -115,7 +116,7 @@ export async function POST(req: NextRequest) {
       headers: { "Access-Control-Allow-Origin": "*" }
     });
   } catch (err) {
-    console.error(`MCP execution failed for ${toolName}:`, err);
+    console.error(`MCP execution failed for ${sanitizeLog(toolName)}:`, sanitizeLog(err));
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
