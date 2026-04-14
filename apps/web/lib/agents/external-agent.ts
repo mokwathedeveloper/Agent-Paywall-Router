@@ -67,7 +67,13 @@ export class ExternalAgentClient {
     });
 
     if (!res.ok) {
-      throw new Error(`[Stellar/x402] Tool execution failed — HTTP ${res.status} from ${targetUrl}`);
+      // If we got here, wrapFetchWithPayment already tried paying if it was a 402.
+      // Any error now is likely a permanent failure (400, 500, etc.) and we should stop.
+      const errorBody = await res.json().catch(() => ({}));
+      const message = errorBody.detail || errorBody.error || `HTTP ${res.status}`;
+      
+      console.error(`[Stellar/x402] Tool execution failed permanently: ${message}`);
+      throw new Error(`${toolName.charAt(0).toUpperCase() + toolName.slice(1)} provider error: ${message}`);
     }
 
     const result = await res.json();
