@@ -47,6 +47,9 @@ export async function authorizeSpendingPolicyForVerifiedPayment(
 ): Promise<SpendingPolicyProof | NextResponse> {
   try {
     const payerAddress = extractPayerAddressFromPaymentPayload(paymentPayload);
+    if (!payerAddress) {
+      throw new Error("Payer address required.");
+    }
     return await authorizeSpendingPolicyForPayer(toolName, payerAddress);
   } catch (err: unknown) {
     const msg = String((err as { message?: string })?.message ?? err);
